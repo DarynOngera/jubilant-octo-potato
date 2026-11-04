@@ -15,7 +15,7 @@ rules for the highest-value subset.
 - ✅ Patch-verification harness that runs a PoC against its correct vulnerable + patched target pair and asserts the effect collapses (`tests/regression/compare_versions.py`).
 - ✅ Behavioral detection rules, self-tested against synthetic data (`tests/detection/thresholds.py`).
 - ✅ Multi-range affected-version support, per-version CVE exposure, and deduplicated lab checkpoints (`triage/version_resolver.py`), with unit tests.
-- ✅ **CVE-2026-116078 validated live** on 2026-11-04: interim `1.14.0` amplified **8.90x**, patched `1.14.1` **0.58x** -> `CONFIRMED`.
+- ✅ **CVE-2026-116078 validated live** on 2026-11-04: interim `1.14.0` amplified **8.90x**, patched `1.14.1` **0.58x** -> `CONFIRMED`. This is historical single-run evidence; a later single run was noisy, so M3 will replace it with a multi-run median/variance verdict.
 - ✅ **VulnForge M1/M2 skeleton**: `src/vulnforge/` package + CLI, JSON Schemas, package loader/validator, dynamic-port lab orchestrator, per-version lockfiles, digest-pinned base image, and the first self-contained package at `vulnerabilities/CVE-2026-116078/`.
 - ⚠️ **CVE-2026-111101 remains `INCONCLUSIVE`.** The probe runs, but both `1.13.1` and `1.14.1` show large per-chunk memory growth against the large-chunk control (at 20k chunks, ~4.2 MB vs ~2.2 MB), so the current metric does not isolate the fix. It is registered but must not be cited as a confirmed finding until the probe is redesigned.
 - ⬜ The remaining 22 advisories have priority scores and analyst notes but no PoC yet -- Section "Extending" below is the pattern to follow.

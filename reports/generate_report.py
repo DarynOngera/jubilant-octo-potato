@@ -248,6 +248,11 @@ def main():
             "because a probe that stops reproducing is as important as a patch "
             "that does not hold."
         )
+        lines.append(
+            "\nThese are single-run measurements from the pre-factory harness. "
+            "The VulnForge M3 validator will replace them with repeated runs, "
+            "medians, and a variance guard; treat any single run as provisional."
+        )
     else:
         lines.append("\nNo live regression results are recorded yet; run "
                      "`tests/regression/compare_versions.py --all --json-out "

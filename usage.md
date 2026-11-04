@@ -431,6 +431,11 @@ chunks with pacing, both 1.13.1 and 1.14.1 grow by megabytes against the
 large-chunk control, so the current metric does not isolate the 1.14.0
 fix. See `reports/lab-runtime-fixes.md`.
 
+These are single-run measurements. A later single run of 116078 returned
+patched 2.71x (a `FAIL` under the single-run predicate), while a three-run
+dynamic-lab sample gave patched median 0.72x. M3 replaces single runs with
+medians and a variance guard; treat any single run as provisional.
+
 ---
 
 ## 6. Extending the research
