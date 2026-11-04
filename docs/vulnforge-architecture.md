@@ -306,7 +306,8 @@ M4–M7 are implemented in this branch as described below.
 
 | Decision | Choice |
 |---|---|
-| Source of truth | `data/advisories.json` through M4; per-package advisory is materialized and drift-checked; flip in M5 |
+| Source of truth | `data/advisories.json` remains authoritative; per-package advisory is materialized and drift-checked; full flip deferred |
+| Prioritization | `data/prioritization.json` scores; weights/tiers in `config/research.yaml`; matrix drift-checked |
 | Package directory | `vulnerabilities/` |
 | CLI | stdlib `argparse` |
 | Tests | stdlib `unittest` now; pytest optional for new tests |

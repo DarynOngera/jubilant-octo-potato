@@ -22,6 +22,7 @@ SCHEMA_FILES = {
     "evidence": "evidence.schema.json",
     "exploitability": "exploitability.schema.json",
     "provenance": "provenance.schema.json",
+    "prioritization": "prioritization.schema.json",
 }
 
 

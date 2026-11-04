@@ -1,9 +1,20 @@
 # TODO — VulnForge
 
-Branch: `feat/vulnforge-m4-m7`
+Branch: `feat/prioritizer-data-driven`
 
 M0–M7 are implemented. This file tracks the completed work and the remaining
 future items.
+
+## Prioritizer data-driven (done)
+
+- [x] Move per-CVE I/E/R/D/notes into `data/prioritization.json`
+- [x] Read weights and tier thresholds/labels from `config/research.yaml`
+- [x] Add `schemas/prioritization.schema.json`
+- [x] Validate completeness, unknown CVEs, weights, tiers
+- [x] Deterministic matrix sort with CVE tie-break
+- [x] Extend `vulnforge triage --check` to include matrix drift
+- [x] Add prioritizer/data/package-consistency tests
+- [x] Update report/docs to point at data/config instead of code
 
 ## M4 — detection + reports (done)
 

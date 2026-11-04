@@ -23,3 +23,17 @@ priority_weights:
   exploitability: 0.35
   reachability: 0.15
   detectability: 0.10
+
+priority_tiers:
+  E4:
+    threshold: 8
+    label: "low complexity, unauthenticated, remote"
+  E3:
+    threshold: 6
+    label: "straightforward protocol interaction"
+  E2:
+    threshold: 4
+    label: "needs specific protocol feature/topology"
+  E1:
+    threshold: 0
+    label: "unusual config / multiple prerequisites"

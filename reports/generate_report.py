@@ -10,8 +10,8 @@ the triage step first:
     python3 reports/generate_report.py
 
 Keeps the report a build artifact rather than hand-maintained prose, so
-adding/revising an advisory only ever means editing data/advisories.json
-and triage/prioritizer.py's SCORES table.
+adding/revising an advisory means editing data/advisories.json, and revising
+a score means editing data/prioritization.json or config/research.yaml.
 """
 from __future__ import annotations
 
@@ -230,7 +230,7 @@ def main():
     lines.append("\n**Scope note:** CVSS scores are reproduced verbatim from the advisory records. "
                   "The `priority_P` column is this project's own research-priority score "
                   "(`0.40*Impact + 0.35*Exploitability + 0.15*Reachability + 0.10*Detectability`, "
-                  "see `triage/prioritizer.py`) and is independent of CVSS by design -- "
+                  "see `data/prioritization.json` and `config/research.yaml`) and is independent of CVSS by design -- "
                   "see Section 3.")
 
     lines.append("\n## 1. Exploitability matrix\n")
@@ -251,8 +251,8 @@ def main():
         "the same 8.7 CVSS score (the HTTP/2 resource-exhaustion family largely does) but differ "
         "sharply in how many wire-format details, timing constraints, or protocol-state-machine "
         "steps stand between a client and triggering them. The priority score keeps those axes "
-        "separate and explicit (`triage/prioritizer.py` documents the per-CVE scoring rationale "
-        "in the `notes` field) rather than letting CVSS stand in for both."
+        "separate and explicit (`data/prioritization.json` documents the per-CVE scoring rationale "
+        "in the `notes` field; weights/tiers live in `config/research.yaml`) rather than letting CVSS stand in for both."
     )
 
     lines.append("\n## 4. Per-advisory detail\n")
@@ -437,19 +437,18 @@ def main():
     lines.append(
         "- This report classifies exploitability independently per-CVE; it does not model "
         "combined/chained exploitation across advisories.\n"
-        "- `priority_P` scores are analyst judgment calls recorded in `triage/prioritizer.py`, "
+        "- `priority_P` scores are analyst judgment calls recorded in `data/prioritization.json`, "
         "not derived mechanically -- treat disagreements with them as a reason to revise the "
-        "scoring table, not the report text.\n"
+        "scoring data, not the report text.\n"
         "- PoCs sample `erlang:memory()` on a minimal lab app while the request is in flight; "
         "absolute amplification ratios on a production app with different Plug/body-handling "
         "behaviour will differ, though the direction of the effect (vulnerable amplifies, "
         "patched does not) should not.\n"
         "- The lab currently ships 1.13.1, 1.14.0, and 1.14.1 only. Advisories fixed before "
         "1.13.1 need an older checkpoint image before they can be tested.\n"
-        "- CVE-2026-111101 is registered but its live A/B run is INCONCLUSIVE: both 1.13.1 "
-        "and 1.14.1 show the same class of per-chunk growth against the large-chunk control, "
-        "so the current probe does not isolate what the 1.14.0 fix changed. Do not cite it "
-        "as a confirmed finding until the measurement or the trigger is redesigned.\n"
+        "- CVE-2026-111101 is INCONCLUSIVE: the corrected 1.13.1 vs 1.14.0 pair shows "
+        "a stable 1.60x reduction, below the pre-registered 2.00x threshold, and the "
+        "recorded commits do not identify the 1.14.0 fix. Do not cite it as a confirmed finding.\n"
     )
 
     OUT.write_text("\n".join(lines))

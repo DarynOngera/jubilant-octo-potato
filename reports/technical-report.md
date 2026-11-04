@@ -4,7 +4,7 @@ Generated 2026-11-04 from `data/advisories.json` (24 advisories) and `data/vulne
 
 Source: [Hex advisory registry](https://hex.pm/packages/bandit/advisories), cross-referenced against OSV (`EEF-CVE-*`) and GHSA records linked from each entry.
 
-**Scope note:** CVSS scores are reproduced verbatim from the advisory records. The `priority_P` column is this project's own research-priority score (`0.40*Impact + 0.35*Exploitability + 0.15*Reachability + 0.10*Detectability`, see `triage/prioritizer.py`) and is independent of CVSS by design -- see Section 3.
+**Scope note:** CVSS scores are reproduced verbatim from the advisory records. The `priority_P` column is this project's own research-priority score (`0.40*Impact + 0.35*Exploitability + 0.15*Reachability + 0.10*Detectability`, see `data/prioritization.json` and `config/research.yaml`) and is independent of CVSS by design -- see Section 3.
 
 ## 1. Exploitability matrix
 
@@ -22,10 +22,10 @@ Source: [Hex advisory registry](https://hex.pm/packages/bandit/advisories), cros
 | 10 | [CVE-2026-42786](#cve-2026-42786) | 8.7 | 6.4 | E3 | WebSocket resource exhaustion | 1.11.0 |
 | 11 | [CVE-2026-39804](#cve-2026-39804) | 8.2 | 5.9 | E2 | WebSocket resource exhaustion | 1.11.0 |
 | 12 | [CVE-2026-108529](#cve-2026-108529) | 8.7 | 5.65 | E2 | HTTP/2 resource exhaustion | 1.14.0 |
-| 13 | [CVE-2026-110499](#cve-2026-110499) | 8.7 | 5.65 | E2 | HTTP/2 resource exhaustion | 1.14.0 |
-| 14 | [CVE-2026-109584](#cve-2026-109584) | 8.7 | 5.65 | E2 | HTTP/2 resource exhaustion | 1.14.0 |
-| 15 | [CVE-2026-74836](#cve-2026-74836) | 8.7 | 5.65 | E2 | HTTP/2 resource exhaustion | 1.12.5 |
-| 16 | [CVE-2026-65623](#cve-2026-65623) | 8.7 | 5.65 | E2 | WebSocket resource exhaustion | 1.12.1 |
+| 13 | [CVE-2026-109584](#cve-2026-109584) | 8.7 | 5.65 | E2 | HTTP/2 resource exhaustion | 1.14.0 |
+| 14 | [CVE-2026-110499](#cve-2026-110499) | 8.7 | 5.65 | E2 | HTTP/2 resource exhaustion | 1.14.0 |
+| 15 | [CVE-2026-65623](#cve-2026-65623) | 8.7 | 5.65 | E2 | WebSocket resource exhaustion | 1.12.1 |
+| 16 | [CVE-2026-74836](#cve-2026-74836) | 8.7 | 5.65 | E2 | HTTP/2 resource exhaustion | 1.12.5 |
 | 17 | [CVE-2026-105660](#cve-2026-105660) | 6.9 | 5.25 | E3 | Request metadata validation | 1.13.0 |
 | 18 | [CVE-2026-75484](#cve-2026-75484) | 6.9 | 5.25 | E3 | Request metadata validation | 1.12.5 |
 | 19 | [CVE-2026-111103](#cve-2026-111103) | 8.2 | 5.05 | E2 | HTTP/2 resource exhaustion | 1.14.0 |
@@ -85,7 +85,7 @@ This is why a single "vulnerable" lab image is not enough: 1.13.1 is still expos
 
 ## 3. Methodology note: why priority != CVSS
 
-CVSS answers 'how bad if it fires, under worst-case assumptions.' It does not answer 'how much researcher/attacker effort does firing it take.' Several advisories here carry the same 8.7 CVSS score (the HTTP/2 resource-exhaustion family largely does) but differ sharply in how many wire-format details, timing constraints, or protocol-state-machine steps stand between a client and triggering them. The priority score keeps those axes separate and explicit (`triage/prioritizer.py` documents the per-CVE scoring rationale in the `notes` field) rather than letting CVSS stand in for both.
+CVSS answers 'how bad if it fires, under worst-case assumptions.' It does not answer 'how much researcher/attacker effort does firing it take.' Several advisories here carry the same 8.7 CVSS score (the HTTP/2 resource-exhaustion family largely does) but differ sharply in how many wire-format details, timing constraints, or protocol-state-machine steps stand between a client and triggering them. The priority score keeps those axes separate and explicit (`data/prioritization.json` documents the per-CVE scoring rationale in the `notes` field; weights/tiers live in `config/research.yaml`) rather than letting CVSS stand in for both.
 
 ## 4. Per-advisory detail
 
@@ -257,20 +257,6 @@ CVSS answers 'how bad if it fires, under worst-case assumptions.' It does not an
 - Fixing commit(s): [`220b9dfd27`](https://github.com/mtrudel/bandit/commit/220b9dfd27f9a21305be2afc75cbe585ddc24e7a), [`6feadb3118`](https://github.com/mtrudel/bandit/commit/6feadb31189d18b7dcda6c663112cd3bbaf63a46)
 - PoC status: not yet implemented (see Section 5 for the pattern to extend)
 
-### CVE-2026-110499
-
-**Client-chosen HPACK encoder table size is applied uncapped, growing per-connection state with every response in Bandit**
-
-- GHSA: GHSA-47x4-3fxf-82fr &nbsp;|&nbsp; OSV: EEF-CVE-2026-110499
-- CVSS 4.0: **8.7** &nbsp;(`CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N`)
-- Affected: `>= 0.3.6 and < 1.14.0` &nbsp;|&nbsp; Fixed in: `1.14.0`
-- Published: 2026-10-26
-- Track: HTTP/2 resource exhaustion
-- Research priority: **5.65** (I=6 E=5 R=6 D=6) -- E2 - needs specific protocol feature/topology
-- Analyst note: HPACK dynamic-table size update per response; needs many requests over one connection to accumulate state.
-- Fixing commit(s): [`0e68313fab`](https://github.com/mtrudel/bandit/commit/0e68313fab9d204257ebad5c447e4cd9cea8e0ea), [`220b9dfd27`](https://github.com/mtrudel/bandit/commit/220b9dfd27f9a21305be2afc75cbe585ddc24e7a)
-- PoC status: not yet implemented (see Section 5 for the pattern to extend)
-
 ### CVE-2026-109584
 
 **HTTP/2 cookie crumb join expands a small HPACK header block into an unbounded allocation in Bandit**
@@ -285,18 +271,18 @@ CVSS answers 'how bad if it fires, under worst-case assumptions.' It does not an
 - Fixing commit(s): [`220b9dfd27`](https://github.com/mtrudel/bandit/commit/220b9dfd27f9a21305be2afc75cbe585ddc24e7a), [`44bf969cd5`](https://github.com/mtrudel/bandit/commit/44bf969cd59851622fb6ee4d16227fbc39a77fb4)
 - PoC status: not yet implemented (see Section 5 for the pattern to extend)
 
-### CVE-2026-74836
+### CVE-2026-110499
 
-**HTTP/2 connection-window starvation pins Plug processes indefinitely in Bandit**
+**Client-chosen HPACK encoder table size is applied uncapped, growing per-connection state with every response in Bandit**
 
-- GHSA: GHSA-xj8g-532w-jv94 &nbsp;|&nbsp; OSV: EEF-CVE-2026-74836
+- GHSA: GHSA-47x4-3fxf-82fr &nbsp;|&nbsp; OSV: EEF-CVE-2026-110499
 - CVSS 4.0: **8.7** &nbsp;(`CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N`)
-- Affected: `>= 0.3.4 and < 1.12.5` &nbsp;|&nbsp; Fixed in: `1.12.5`
-- Published: 2026-08-20
+- Affected: `>= 0.3.6 and < 1.14.0` &nbsp;|&nbsp; Fixed in: `1.14.0`
+- Published: 2026-10-26
 - Track: HTTP/2 resource exhaustion
 - Research priority: **5.65** (I=6 E=5 R=6 D=6) -- E2 - needs specific protocol feature/topology
-- Analyst note: Connection-window starvation pins Plug processes; needs the connection window, not just stream windows, held at zero.
-- Fixing commit(s): [`f6914aad14`](https://github.com/mtrudel/bandit/commit/f6914aad14bb1365dd6f306aa592cfb0819bed3e)
+- Analyst note: HPACK dynamic-table size update per response; needs many requests over one connection to accumulate state.
+- Fixing commit(s): [`0e68313fab`](https://github.com/mtrudel/bandit/commit/0e68313fab9d204257ebad5c447e4cd9cea8e0ea), [`220b9dfd27`](https://github.com/mtrudel/bandit/commit/220b9dfd27f9a21305be2afc75cbe585ddc24e7a)
 - PoC status: not yet implemented (see Section 5 for the pattern to extend)
 
 ### CVE-2026-65623
@@ -311,6 +297,20 @@ CVSS answers 'how bad if it fires, under worst-case assumptions.' It does not an
 - Research priority: **5.65** (I=6 E=5 R=6 D=6) -- E2 - needs specific protocol feature/topology
 - Analyst note: Quadratic CPU on fragment reassembly; CPU-bound rather than memory-bound, needs wall-clock timing to observe cleanly.
 - Fixing commit(s): [`418ef7e906`](https://github.com/mtrudel/bandit/commit/418ef7e906192a230ddba112f7a669c87b6b0e3a)
+- PoC status: not yet implemented (see Section 5 for the pattern to extend)
+
+### CVE-2026-74836
+
+**HTTP/2 connection-window starvation pins Plug processes indefinitely in Bandit**
+
+- GHSA: GHSA-xj8g-532w-jv94 &nbsp;|&nbsp; OSV: EEF-CVE-2026-74836
+- CVSS 4.0: **8.7** &nbsp;(`CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N`)
+- Affected: `>= 0.3.4 and < 1.12.5` &nbsp;|&nbsp; Fixed in: `1.12.5`
+- Published: 2026-08-20
+- Track: HTTP/2 resource exhaustion
+- Research priority: **5.65** (I=6 E=5 R=6 D=6) -- E2 - needs specific protocol feature/topology
+- Analyst note: Connection-window starvation pins Plug processes; needs the connection window, not just stream windows, held at zero.
+- Fixing commit(s): [`f6914aad14`](https://github.com/mtrudel/bandit/commit/f6914aad14bb1365dd6f306aa592cfb0819bed3e)
 - PoC status: not yet implemented (see Section 5 for the pattern to extend)
 
 ### CVE-2026-105660
@@ -461,7 +461,7 @@ All 24 advisories are fixed upstream; the single remediation is **upgrade to Ban
 ## 8. Limitations
 
 - This report classifies exploitability independently per-CVE; it does not model combined/chained exploitation across advisories.
-- `priority_P` scores are analyst judgment calls recorded in `triage/prioritizer.py`, not derived mechanically -- treat disagreements with them as a reason to revise the scoring table, not the report text.
+- `priority_P` scores are analyst judgment calls recorded in `data/prioritization.json`, not derived mechanically -- treat disagreements with them as a reason to revise the scoring data, not the report text.
 - PoCs sample `erlang:memory()` on a minimal lab app while the request is in flight; absolute amplification ratios on a production app with different Plug/body-handling behaviour will differ, though the direction of the effect (vulnerable amplifies, patched does not) should not.
 - The lab currently ships 1.13.1, 1.14.0, and 1.14.1 only. Advisories fixed before 1.13.1 need an older checkpoint image before they can be tested.
-- CVE-2026-111101 is registered but its live A/B run is INCONCLUSIVE: both 1.13.1 and 1.14.1 show the same class of per-chunk growth against the large-chunk control, so the current probe does not isolate what the 1.14.0 fix changed. Do not cite it as a confirmed finding until the measurement or the trigger is redesigned.
+- CVE-2026-111101 is INCONCLUSIVE: the corrected 1.13.1 vs 1.14.0 pair shows a stable 1.60x reduction, below the pre-registered 2.00x threshold, and the recorded commits do not identify the 1.14.0 fix. Do not cite it as a confirmed finding.
