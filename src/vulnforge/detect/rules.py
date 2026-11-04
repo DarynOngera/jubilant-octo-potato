@@ -40,6 +40,7 @@ DEFAULTS = dict(
     max_frame_rate_per_sec=200,
     min_bytes_per_frame_ok=64,
     memory_outlier_stdevs=3.0,
+    memory_outlier_floor_bytes=3_000_000,
     max_body_duration_per_kb_s=0.5,
     min_process_growth_samples=3,
     min_process_growth=10,
@@ -81,12 +82,16 @@ def rule_memory_outlier(
         )
     mu, sigma = mean(others), pstdev(others) or 1
     z = (sample.attributable_memory_bytes - mu) / sigma
-    triggered = z > cfg["memory_outlier_stdevs"]
+    triggered = (
+        z > cfg["memory_outlier_stdevs"]
+        and sample.attributable_memory_bytes >= cfg["memory_outlier_floor_bytes"]
+    )
     return Verdict(
         "memory_per_connection_outlier",
         triggered,
         f"z={z:.2f} (memory={sample.attributable_memory_bytes}B, "
-        f"pool mean={mu:.0f}B, stdev={sigma:.0f}B)",
+        f"pool mean={mu:.0f}B, stdev={sigma:.0f}B; "
+        f"floor={cfg['memory_outlier_floor_bytes']}B)",
     )
 
 
