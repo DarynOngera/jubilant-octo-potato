@@ -1,0 +1,23 @@
+# VulnForge factory configuration.
+#
+# The global catalog in data/advisories.json remains the source of truth for
+# M0-M4. Per-package advisory.json files are materialized from it and checked
+# for drift by `vulnforge package validate`.
+
+factory:
+  packages_dir: vulnerabilities
+  data_dir: data
+  evidence_dir: evidence
+  reports_dir: reports
+  schemas_dir: schemas
+
+validation:
+  default_runs: 3
+  max_cv: 0.25
+  require_distinct_targets: true
+
+targets:
+  bandit:
+    adapter: vulnforge.targets.bandit:BanditAdapter
+    app_dir: lab/app
+    limits: config/lab-limits.yaml

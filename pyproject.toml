@@ -1,13 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
-name = "bandit-security-research"
+name = "vulnforge"
 version = "0.1.0"
-description = "Triage, PoC, lab, and detection pipeline for Bandit (Elixir HTTP server) security advisories"
+description = "VulnForge: turn vulnerability intelligence into reproducible labs, PoCs, validation evidence, detection, and reports"
 requires-python = ">=3.10"
 dependencies = [
     "packaging>=24.0",
     "pyyaml>=6.0",
     "h2>=4.1",
+    "jsonschema>=4.20",
 ]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+vulnforge = "vulnforge.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

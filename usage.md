@@ -22,7 +22,7 @@ virtualenv. If you have activated it, `python3` is equivalent.
 ```bash
 # 1. Python environment
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -e '.[dev]'
 
 # 2. Regenerate triage data + report
 .venv/bin/python triage/version_resolver.py
@@ -32,6 +32,7 @@ python3 -m venv .venv
 # 3. Tests
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 .venv/bin/python tests/detection/thresholds.py
+.venv/bin/vulnforge package validate
 
 # 4. Lab
 docker compose -f lab/compose.yaml build
@@ -60,6 +61,10 @@ The regression command exits non-zero unless **every** probe is
 | `data/version-cve-map.json` | Generated: every known release -> vulnerable CVEs |
 | `data/lab-checkpoints.json` | Generated: deduplicated A/B checkpoint plan |
 | `data/vulnerability-matrix.json` | Generated: priority-scored advisory matrix |
+| `src/vulnforge/` | Factory package: CLI, config, models, schemas, package validation |
+| `vulnerabilities/` | Self-contained research packages, one directory per CVE |
+| `schemas/` | JSON Schemas for advisory, package, lab, probe, validation, detection, evidence |
+| `docs/` | Architecture and authoring documentation |
 | `triage/version_resolver.py` | Multi-range parser, exposure map, checkpoints |
 | `triage/prioritizer.py` | I/E/R/D scores + `priority_P` ranking |
 | `reports/generate_report.py` | Builds `reports/technical-report.md` |
@@ -68,14 +73,85 @@ The regression command exits non-zero unless **every** probe is
 | `tests/regression/compare_versions.py` | Runs each PoC against its A/B pair |
 | `tests/detection/thresholds.py` | Four behavioral detection rules + self-test |
 | `tests/test_version_resolver.py` | 18 range/parser/checkpoint unit tests |
+| `tests/test_package_model.py` etc. | Package, CLI, schema, and golden tests |
 | `lab/app/` | Version-parameterized Plug/Bandit target image |
 | `lab/compose.yaml` | Three targets, resource caps, loopback ports |
 | `config/research.yaml` | Target URLs and pinned versions |
+| `config/vulnforge.yaml` | Factory paths, validation defaults, target adapters |
 | `config/lab-limits.yaml` | Isolation rules, resource and experiment budgets |
 | `evidence/metrics/` | Regression JSON outputs (gitignored except `.gitkeep`) |
 | `reports/lab-runtime-fixes.md` | Standalone report for the OTP/VM and lab fixes |
 
 Generated artifacts should not be hand-edited; re-run the generator.
+
+---
+
+## VulnForge factory CLI (M1)
+
+The factory package is installed editable with `pip install -e '.[dev]'`.
+It is also runnable as `python -m vulnforge`.
+
+```bash
+# High-level package status
+vulnforge status
+vulnforge status --json
+
+# Package inspection
+vulnforge package list
+vulnforge package show CVE-2026-116078
+vulnforge package show CVE-2026-116078 --json
+
+# Schema + cross-file validation (all packages, or one)
+vulnforge package validate
+vulnforge package validate CVE-2026-116078
+vulnforge package validate --all --json
+```
+
+`vulnforge package validate` checks:
+
+- JSON Schema conformance for advisory, package, lab, and probe manifests;
+- CVE consistency across directory name, package manifest, advisory, lab, and
+  probe;
+- vulnerable/patched versions matching between the manifest and lab, and
+  `patched == first_fixed` (M1 rule);
+- lab target roles existing and matching the probe's target names;
+- required analysis, detection, evidence, and test paths;
+- `status: validated` agreeing with `last_verdict: CONFIRMED`;
+- the package advisory being in sync with `data/advisories.json`.
+
+The remaining factory commands are explicit M1 stubs:
+
+| Command | Planned milestone |
+|---|---|
+| `vulnforge triage` | M2 |
+| `vulnforge lab` | M2 |
+| `vulnforge poc` | M3 |
+| `vulnforge validate` | M3 |
+| `vulnforge detect` | M4 |
+| `vulnforge report` | M4 |
+| `vulnforge ingest` | M5 |
+
+They exit `2` with a message naming the milestone; they do not silently do
+nothing. See `docs/vulnforge-architecture.md` for the full design.
+
+### Package layout
+
+```text
+vulnerabilities/CVE-2026-116078/
+├── advisory.json
+├── package.json
+├── analysis/
+├── lab/
+├── poc/
+├── tests/
+├── detection/
+├── evidence/
+└── report.md
+```
+
+`data/advisories.json` is still the global source of truth in M0–M4. The
+package `advisory.json` is a materialized, drift-checked view; M5 flips the
+source of truth to the package and generates the global index.
 
 ---
 
@@ -85,11 +161,13 @@ Generated artifacts should not be hand-edited; re-run the generator.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -e '.[dev]'
 ```
 
-Dependencies: `packaging`, `pyyaml`, `h2`. Tests use the standard-library
-`unittest` runner; `pytest` is not required.
+Runtime dependencies: `packaging`, `pyyaml`, `h2`, `jsonschema`. The editable
+install also puts the `vulnforge` command in `.venv/bin/`. Tests use the
+standard-library `unittest` runner; `pytest` is installed by the `dev` extra
+but is optional.
 
 ### Version/exposure resolution
 
@@ -157,7 +235,7 @@ Typical full regeneration:
 ## 2. Tests and detection self-test
 
 ```bash
-# All Python unit tests (18 currently)
+# All Python unit tests (45 currently)
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 
 # Single file
