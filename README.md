@@ -10,7 +10,7 @@ CVSS.
 
 | CVE | Pair | Vulnerable median | Patched median | Verdict | Detection |
 |---|---|---:|---:|---|---|
-| CVE-2026-116078 | 1.14.0 → 1.14.1 | 7.73 MiB | 0.59 MiB | **CONFIRMED** | **TRIGGERED** |
+| CVE-2026-116078 | 1.14.0 → 1.14.1 | 7.79 MiB | 0.63 MiB | **CONFIRMED** | **TRIGGERED** |
 | CVE-2026-111101 | 1.13.1 → 1.14.0 | 2.66 MiB | 1.67 MiB | **INCONCLUSIVE** (1.60x < 2.00x) | INCONCLUSIVE |
 
 Medians are from 3 runs of the absolute attack-memory metric. 116078's run

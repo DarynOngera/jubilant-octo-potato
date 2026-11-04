@@ -165,7 +165,7 @@ recorded.
 - Corrected 111101 pair: **1.13.1 vs 1.14.0** (first fixed), not 1.14.1.
 - Store raw per-run data, telemetry, logs, image IDs, and hashes.
 
-Current results: 116078 `CONFIRMED` (7.73 MiB vs 0.59 MiB, 3 runs);
+Current results: 116078 `CONFIRMED` (7.79 MiB vs 0.63 MiB, 3 runs);
 111101 `INCONCLUSIVE` (1.60x relative reduction, below the 2.00x threshold).
 
 ## 6. Evidence bundle
@@ -237,7 +237,7 @@ M4–M7 are implemented in this branch as described below.
   patched-CV guard, and non-overlapping-range checks in absolute mode.
 - Evidence bundles include raw runs, telemetry, logs, image IDs, and hashes;
   the validator updates `package.json` status/verdict.
-- CVE-2026-116078: 100k frames, vulnerable median 7.73 MiB vs patched 0.59 MiB,
+- CVE-2026-116078: 100k frames, vulnerable median 7.79 MiB vs patched 0.63 MiB,
   `CONFIRMED`.
 - CVE-2026-111101: corrected 1.13.1 vs 1.14.0 pair, stable 1.60x reduction,
   below the pre-registered 2.00x threshold, `INCONCLUSIVE`.
