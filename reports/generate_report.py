@@ -76,6 +76,28 @@ def load_package_validations() -> list[dict]:
     return results
 
 
+def load_package_detections() -> dict[str, dict]:
+    results: dict[str, dict] = {}
+    for path in sorted((REPO_ROOT / "vulnerabilities").glob("*/detection/evidence.json")):
+        try:
+            data = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(data, dict) and data.get("cve"):
+            results[str(data["cve"])] = data
+    return results
+
+
+def latest_evidence_date() -> str:
+    """Use the newest validation date so reports are deterministic in CI."""
+    dates = []
+    for result in load_package_validations():
+        finished = result.get("finished_at")
+        if isinstance(finished, str) and len(finished) >= 10:
+            dates.append(finished[:10])
+    return max(dates) if dates else date.today().isoformat()
+
+
 def package_poc_relpath(cve: str) -> str | None:
     path = REPO_ROOT / "vulnerabilities" / cve / "poc" / "exploit.py"
     if path.is_file():
@@ -195,7 +217,7 @@ def render_per_version_section(lines: list[str], exposure: dict, checkpoints: li
 
 def main():
     advisories, advisories_list, matrix = load()
-    today = date.today().isoformat()
+    today = latest_evidence_date()
     exposure = resolve_all(advisories_list)
     checkpoints = suggested_checkpoints(advisories_list, exposure)
 
@@ -287,13 +309,14 @@ def main():
             )
 
     if package_validations:
+        package_detections = load_package_detections()
         lines.append(
-            "\nM3 multi-run results (`vulnerabilities/*/evidence/validation.json`):\n"
+            "\nMulti-run results (`vulnerabilities/*/evidence/validation.json`):\n"
         )
         lines.append(
-            "| CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict |"
+            "| CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict | Detection |"
         )
-        lines.append("|---|---|---|---|---|---|---|")
+        lines.append("|---|---|---|---|---|---|---|---|")
         for result in package_validations:
             targets = result.get("targets", {})
             vuln = targets.get("vulnerable", {})
@@ -301,12 +324,14 @@ def main():
             vuln_summary = vuln.get("summary", {})
             patched_summary = patched.get("summary", {})
             metric = result.get("aggregates", {}).get("metric", "unknown")
+            detection = package_detections.get(result.get("cve"), {})
             lines.append(
                 f"| `{result.get('cve')}` | `{vuln.get('version', '?')}` -> "
                 f"`{patched.get('version', '?')}` | `{metric}` | "
                 f"{format_metric(vuln_summary.get('median'), metric)} | "
                 f"{format_metric(patched_summary.get('median'), metric)} | "
-                f"{result.get('runs', '?')} | **{result.get('verdict')}** |"
+                f"{result.get('runs', '?')} | **{result.get('verdict')}** | "
+                f"{detection.get('result', '-')} |"
             )
         lines.append(
             "\nVerdicts are median-based with a patched-CV guard; run ranges must "

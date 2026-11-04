@@ -173,10 +173,10 @@ class LabOrchestrator:
                 raise LabError(
                     f"could not read /stats from {role} target {target.admin_url}"
                 )
-            actual = stats.get("bandit_version")
+            actual = self.adapter.version_from_stats(stats)
             if actual != service.version:
                 raise LabError(
-                    f"{role} target reports Bandit {actual!r}, expected "
+                    f"{role} target reports version {actual!r}, expected "
                     f"{service.version!r}"
                 )
 
@@ -228,7 +228,9 @@ class LabOrchestrator:
                 "running": running,
                 "healthy": healthy,
                 "health_detail": health_detail,
-                "bandit_version": (stats or {}).get("bandit_version"),
+                "reported_version": (
+                    self.adapter.version_from_stats(stats) if stats else None
+                ),
             }
         return {
             "cve": package.cve,

@@ -1,6 +1,7 @@
 # VulnForge Architecture
 
-**Status:** M0–M3 implemented. Bandit is the first adapter, not the product.
+**Status:** M0–M7 implemented. M6's adapter proof uses the toy target; a real
+second production target remains future work.
 
 VulnForge turns vulnerability intelligence into executable, testable research
 artifacts:
@@ -31,15 +32,16 @@ exploit scripts.
 
 | Subsystem | Responsibility | Current state | Milestone |
 |---|---|---|---|
-| Intelligence | Fetch/normalize CVE, GHSA, OSV, commits | Manual catalog | M5 |
-| Version resolver | Affected/fixed ranges, version plans | Working multi-range resolver | M2 |
-| Source analyzer | Commit diffs, affected code paths, root-cause scaffold | Commits list only | M5 |
+| Intelligence | Fetch/normalize CVE, GHSA, OSV, commits | M5: OSV query, raw snapshots, merge/proposal, offline mode | M5 (done) |
+| Version resolver | Affected/fixed ranges, version plans | Working multi-range resolver + triage wrapper | M2/M5 (done) |
+| Source analyzer | Commit diffs, affected code paths, root-cause scaffold | M5: patch capture + `root-cause.generated.md` | M5 (done) |
 | Image builder | Pinned vulnerable/patched images + provenance | M2: per-version locks, base-image digest, OCI labels, image IDs | M2 (done) |
 | Lab orchestrator | Build/start/stop/status, dynamic ports, isolation | M2: dynamic loopback ports, per-lab Compose project, runtime file | M2 (done) |
 | PoC engine | Load, scaffold, run package probes | M3: package-local probes + `ProbeResult` | M3 (done) |
 | Validator | A/B runs, repetitions, variance, verdicts | M3: medians, CV guard, hash-checked evidence | M3 (done) |
-| Detector | Behavioral rules against captured telemetry | Synthetic self-test | M4 |
-| Reporter | Per-CVE and global Markdown/JSON | Global report | M4 |
+| Detector | Behavioral rules against captured telemetry | M4: offline rules + per-target `detection/evidence.json` | M4 (done) |
+| Reporter | Per-CVE and global Markdown/JSON | M4: generated per-CVE/global reports from evidence | M4 (done) |
+| Adapter boundary | Keep target-specific behavior out of core | M6: generalized contract + toy adapter proof | M6 (toy proof) |
 
 ## 3. Repository layout
 
@@ -53,17 +55,19 @@ src/vulnforge/
   models.py         # dataclasses for packages/artifacts
   schema.py         # JSON Schema validation
   packages.py       # discovery, loading, cross-file checks
+  doctor.py         # environment checks + runtime cleanup
   __main__.py       # python -m vulnforge
-  ingest/           # M5
-  triage/           # pending: version-plan extraction
+  ingest/           # M5: OSV, proposal/merge, commit analysis
+  triage/           # M5: resolver/prioritizer wrapper
   lab/              # M2: orchestrator, docker backend, ports, provenance
   probe/            # M3: ProbeResult, ProbeTarget, sampler, loader
   validate/         # M3: multi-run stats, verdicts, evidence bundles
-  detect/           # M4
-  report/           # M4
+  detect/           # M4: rules + offline detection runner
+  report/           # M4: per-CVE/global report generation
   targets/
     base.py         # TargetAdapter protocol
     bandit/         # Bandit adapter
+    toy/            # non-Bandit adapter proof
 ```
 
 ### Artifacts
@@ -198,13 +202,13 @@ rather than hand-edit.
 | **M1** | Factory skeleton, package model, CLI, first package | `vulnforge package validate CVE-2026-116078` passes; old scripts work |
 | **M2** | Lab orchestrator, image provenance, dynamic ports, adapters | Build/start/status works; image digests recorded; no fixed global ports |
 | **M3** | Probe protocol, multi-run validation, evidence bundles | 116078 CONFIRMED over 3 runs; 111101 has a defensible verdict (both done) |
-| **M4** | Detection against telemetry, per-CVE/global reports | `detect` and `report` produce artifacts |
-| **M5** | OSV/Hex/GitHub ingestion, source analysis | Idempotent refresh with diff/apply; fixture tests offline |
-| **M6** | Second target adapter | Same CLI works for a non-Bandit target; core has no target imports |
-| **M7** | CI, hardening, docs, optional OCI/local registry | Clean-checkout CI green; Docker integration passes |
+| **M4** | Detection against telemetry, per-CVE/global reports | `detect` and `report` produce artifacts (done) |
+| **M5** | OSV/Hex/GitHub ingestion, source analysis | Dry-run/apply, offline fixtures, commit scaffold, triage (done; full catalog flip deferred) |
+| **M6** | Second target adapter | Toy target + generalized contract (done); real second target future |
+| **M7** | CI, hardening, docs, optional OCI/local registry | CI, doctor, clean, docs, ruff (done); OCI/SBOM optional |
 
 **First vertical slice:** M0–M3 for CVE-2026-116078 and CVE-2026-111101.
-Roughly 6–8 focused weeks to M4; M5–M7 add another 3–4 weeks.
+M4–M7 are implemented in this branch as described below.
 
 ### M2 implementation notes
 
@@ -233,10 +237,60 @@ Roughly 6–8 focused weeks to M4; M5–M7 add another 3–4 weeks.
   patched-CV guard, and non-overlapping-range checks in absolute mode.
 - Evidence bundles include raw runs, telemetry, logs, image IDs, and hashes;
   the validator updates `package.json` status/verdict.
-- CVE-2026-116078: 100k frames, vulnerable median 8.03 MB vs patched 0.55 MB,
+- CVE-2026-116078: 100k frames, vulnerable median 5.27 MB vs patched 0.61 MB,
   `CONFIRMED`.
 - CVE-2026-111101: corrected 1.13.1 vs 1.14.0 pair, stable 1.60x reduction,
   below the pre-registered 2.00x threshold, `INCONCLUSIVE`.
+
+### M4 implementation notes
+
+- `MemorySampler` records total memory, process count, top-process memory, and
+  run queue; probes capture a benign connection pool for outlier baselines.
+- `vulnforge.detect` evaluates the four behavioral rules offline over
+  `evidence/runs` and `evidence/telemetry`.
+- A signal is `TRIGGERED` only when it discriminates vulnerable from patched;
+  frame-rate/body-duration rules may fire on both targets by design.
+- Per-CVE `report.md`/`report.json` are generated from advisory, analysis,
+  validation, detection, provenance, and evidence hashes. The global report
+  reads package validation and detection evidence.
+- 116078 detection: `TRIGGERED` via the memory-outlier rule.
+- 111101 detection: `INCONCLUSIVE` because the rules fire on both targets.
+
+### M5 implementation notes
+
+- OSV ingestion writes raw snapshots, a proposed catalog, and a unified diff;
+  `--apply` is explicit and merge preserves existing human metadata.
+- `vulnforge analyze` captures fixing-commit patches and writes
+  `analysis/root-cause.generated.md`; it does not overwrite human analysis.
+- `vulnforge triage` wraps the resolver/prioritizer and can overlay packaged
+  advisories onto the catalog.
+- The 116078 commit review identified the real fix: `do_read_data/5` changed
+  from an iolist accumulator to a binary append.
+- The 111101 recorded commits are a version bump and an unrelated 2020
+  refactor; the analysis flags the mismatch.
+- Full catalog-to-package source-of-truth flip is deferred until all
+  advisories have packages.
+
+### M6 implementation notes
+
+- `TargetAdapter` gained `lockfile(...)` and `version_from_stats(...)`, removing
+  Bandit-specific assumptions from provenance and status reporting.
+- A toy Python target (`targets/toy/`) uses one listener for app + stats and
+  proves build/start/status/stop with dynamic ports.
+- The core (`lab`, `probe`, `validate`, `targets/base.py`) has no Bandit
+  references; a contract test enforces this.
+- A real second production target (Plug/Cowboy/Nginx) remains future work.
+
+### M7 implementation notes
+
+- `.github/workflows/ci.yml` runs pytest, package validation, resolver drift,
+  report drift, and ruff on Python 3.10–3.13; Docker integration is
+  manual/weekly.
+- `vulnforge doctor` checks Python, Docker, Compose, config, schemas, and
+  packages.
+- `vulnforge clean` removes `.vulnforge` runtime state only.
+- Authoring, ingestion, verdict, and CI docs are under `docs/`.
+- Optional OCI registry/SBOM/signing remains deferred.
 
 ## 9. Non-goals for the first slice
 
@@ -265,25 +319,24 @@ Roughly 6–8 focused weeks to M4; M5–M7 add another 3–4 weeks.
 
 ## 11. Known current gaps
 
-M2 addressed the image/lab gaps, and M3 addressed the single-run validator,
-package-probe bridge, and evidence-bundle gaps. Per-version lockfiles, digest
-pinning, dynamic ports, package-local probes, runtime integration, multi-run
-medians, telemetry, logs, and hash-checked evidence are all in place.
+M2–M7 addressed the earlier image/lab, validation, detection, reporting,
+ingestion, adapter-boundary, and CI gaps. Remaining:
 
-Remaining:
-
-1. Detection is specified but not executed against captured telemetry (M4).
-2. No ingestion or commit-level source analysis (M5).
-3. Bandit-specific assumptions remain in the legacy `probes/` harness and
-   `tests/regression/`; the adapter boundary is only partially extracted (M6).
+1. The full catalog-to-package source-of-truth flip is deferred until all
+   advisories have packages; `triage --from-packages` is an explicit overlay.
+2. M6 proves the adapter boundary with a toy target, not a real second
+   production target (Plug/Cowboy/Nginx).
+3. Optional OCI registry, SBOM generation, and image signing are deferred.
 4. The static `lab/compose.yaml` fallback duplicates the generated Compose
-   intent; it can be removed once manual fallback is no longer needed.
-5. M3 evidence/provenance was generated from a dirty worktree. Rebuild and
-   revalidate after the M3 commits if a clean `git.dirty: false` record is
-   required; rerunning validation may change the 111101 verdict only within
-   its measurement noise.
+   intent; it remains for manual use.
+5. Evidence/provenance was generated from a dirty worktree. Rebuild and
+   revalidate after the M4–M7 commits if a clean `git.dirty: false` record is
+   required.
 6. CVE-2026-111101 remains `INCONCLUSIVE`; the metric may not capture the
-   exact 1.14.0 fix. Commit-level review is pending.
-7. No second target adapter yet (M6).
+   exact 1.14.0 fix, and the recorded commits do not identify it.
+7. Live OSV data may not match the synthetic 2026 catalog; ingestion is
+   dry-run/merge and never deletes existing advisories.
+8. Detection is offline evidence review, not a live IDS or Prometheus
+   integration.
 
-These are addressed in M4–M6.
+These are future work, not blockers for the current factory.

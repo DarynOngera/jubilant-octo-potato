@@ -1,52 +1,67 @@
 # TODO — VulnForge
 
-Branch: `feat/vulnforge-m3`
+Branch: `feat/vulnforge-m4-m7`
 
-## M3 — probe protocol, multi-run validation, evidence (done)
+M0–M7 are implemented. This file tracks the completed work and the remaining
+future items.
 
-- [x] Create M3 branch and baseline check
-- [x] Define `ProbeResult` / `ProbeTarget` / shared probe runtime helpers
-- [x] Implement package-local CVE-2026-116078 probe (HTTP/2)
-- [x] Create CVE-2026-111101 package with corrected pair 1.13.1 vs 1.14.0
-- [x] Implement package-local CVE-2026-111101 probe (HTTP/1)
-- [x] Add runtime.json loading and target mapping
-- [x] Add multi-run statistics (median/min/max/stdev/CV)
-- [x] Add verdict logic: absolute + relative modes, variance/separation guard
-- [x] Add evidence bundle: raw runs, telemetry, logs, image digests, hashes
-- [x] Add CLI `vulnforge poc run` and `vulnforge validate`
-- [x] Add pure unit tests for stats/verdict logic
-- [x] Add fake-probe harness tests (no Docker)
-- [x] Run gated integration for 116078 and 111101
-- [x] Update package manifests/status from validation results
-- [x] Update README/usage/architecture/package docs
-- [x] Commit M3 and record evidence
+## M4 — detection + reports (done)
 
-### M3 result
+- [x] Extend telemetry with process/top-memory fields and benign-pool capture
+- [x] Re-run validation to regenerate telemetry for both packages
+- [x] Move/adapt detection rules into `vulnforge.detect`
+- [x] Build detection runner from `evidence/runs` + `evidence/telemetry`
+- [x] Extend detection schema with per-target results
+- [x] Implement `vulnforge detect <CVE>` / `--all`
+- [x] Implement per-CVE report generator
+- [x] Implement global report generation from package evidence
+- [x] Add `vulnforge report <CVE>` / `--all`
+- [x] Add detection/report tests
+- [x] Update docs/TODO
 
-| CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict |
-|---|---|---|---:|---:|---|---|
-| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 8.03 MB | 0.55 MB | 3 | CONFIRMED |
-| CVE-2026-111101 | 1.13.1 -> 1.14.0 | attack memory | 2.80 MB | 1.75 MB | 3 | INCONCLUSIVE (1.60x < 2.00x) |
+## M5 — ingestion + source analysis (done)
 
-## M4 — detection + reports (next)
+- [x] OSV source adapter with raw snapshots + hashes
+- [x] Proposal/diff/apply flow (dry-run by default)
+- [x] Offline fixture mode
+- [x] `vulnforge ingest bandit`
+- [x] Commit-diff capture + root-cause scaffold (`vulnforge analyze`)
+- [x] `vulnforge triage` wrapper + packaged-advisory overlay
+- [x] Ingestion/source-analysis tests
+- [x] Update docs/TODO
 
-- [ ] Load package validation evidence and telemetry
-- [ ] Run the four behavioral rules against captured telemetry
-- [ ] Write `detection/evidence.json`
-- [ ] Per-CVE report generator
-- [ ] Global report aggregation from package evidence
-- [ ] Add detection/evidence tests
+## M6 — second target adapter (done: toy proof)
 
-## M5 — ingestion + source analysis
+- [x] Generalize adapter/provenance/version reporting beyond Bandit
+- [x] Add toy target app + adapter (`targets/toy`)
+- [x] Prove build/start/status/stop on the toy target
+- [x] Generalized provenance (no Bandit lockfile assumption)
+- [x] Contract test: core has no Bandit imports
+- [x] Gated Docker integration for the toy target
+- [x] Update docs/TODO
+- [ ] Real second production target (Plug/Cowboy/Nginx) — future work
 
-- [ ] OSV/Hex/GitHub ingestion with raw snapshots and diff/apply
-- [ ] Commit diff capture and root-cause scaffold
+## M7 — hardening, CI, docs (done)
 
-## M6 — second target adapter
+- [x] `vulnforge doctor`
+- [x] `vulnforge clean` for `.vulnforge` runtime state
+- [x] CI workflow: tests, schema validation, package validate, resolver/report drift, ruff
+- [x] Lint configuration + pre-commit
+- [x] Adapter/package/ingestion/verdict/CI docs
+- [x] Final README/usage updates
+- [ ] Optional OCI registry / SBOM / signing — future work
 
-- [ ] Prove adapter boundary with a non-Bandit target
+## Current results
 
-## M7 — hardening
+| CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict | Detection |
+|---|---|---|---:|---:|---|---|---|
+| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 5.03 MiB | 0.58 MiB | 3 | CONFIRMED | TRIGGERED |
+| CVE-2026-111101 | 1.13.1 -> 1.14.0 | attack memory | 2.66 MiB | 1.67 MiB | 3 | INCONCLUSIVE (1.60x < 2.00x) | INCONCLUSIVE |
 
-- [ ] CI, lint/type checks, schema validation
-- [ ] Optional local OCI registry / saved image bundles
+## Future work
+
+- Full catalog-to-package source-of-truth flip once all 24 advisories are packaged
+- Real second production target adapter
+- Optional OCI registry / SBOM / image signing
+- Live Prometheus/proxy detection integration
+- Package the remaining 22 advisories

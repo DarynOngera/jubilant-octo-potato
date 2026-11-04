@@ -54,11 +54,13 @@ def _lockfiles(adapter: TargetAdapter, plan: LabPlan) -> dict[str, dict[str, str
     locks: dict[str, dict[str, str]] = {}
     versions = sorted({service.version for service in plan.services.values()})
     for version in versions:
-        path = adapter.app_dir / "locks" / f"mix-{version}.lock"
+        path = adapter.lockfile(version)
+        if path is None:
+            continue
         if not path.is_file():
             raise LabError(
-                f"missing lockfile for Bandit {version}: {path}. "
-                "Add lab/app/locks/mix-<version>.lock."
+                f"missing lockfile for {version}: {path}. "
+                "Add the adapter's lockfile for that version."
             )
         locks[version] = {"path": _relative(path, adapter.repo_root), "sha256": sha256_file(path)}
     return locks

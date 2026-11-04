@@ -13,11 +13,11 @@ rules for the highest-value subset.
 - ✅ Dockerized lab: one version-parameterized Plug/Bandit app, isolated network, resource caps (`lab/`).
 - ✅ Two package-local, wire-level probes under `vulnerabilities/*/poc/`, run by the legacy harness and by `vulnforge validate`.
 - ✅ Patch-verification harness with multi-run medians, variance guards, telemetry, logs, and hash-checked evidence (`vulnforge validate`).
-- ✅ Behavioral detection rules, self-tested against synthetic data (`tests/detection/thresholds.py`).
+- ✅ Behavioral detection rules implemented offline over captured evidence (`vulnforge detect`), with per-target rule verdicts and `detection/evidence.json`.
 - ✅ Multi-range affected-version support, per-version CVE exposure, and deduplicated lab checkpoints (`triage/version_resolver.py`), with unit tests.
-- ✅ **CVE-2026-116078 CONFIRMED** on 2026-11-04 after the M3 multi-run validation: 100k 1-byte DATA frames, vulnerable `1.14.0` median **8.03 MB**, patched `1.14.1` median **0.55 MB**, 3 runs, non-overlapping ranges.
-- ✅ **VulnForge M1/M2/M3 skeleton**: `src/vulnforge/` package + CLI, JSON Schemas, package loader/validator, dynamic-port lab orchestrator, per-version lockfiles, digest-pinned base image, multi-run validation, and two self-contained packages.
-- ⚠️ **CVE-2026-111101 remains `INCONCLUSIVE`.** The corrected M3 pair is `1.13.1` vs `1.14.0` (first fixed, not 1.14.1). Three runs gave vulnerable median 2.80 MB vs patched 1.75 MB, a **1.60x** reduction, below the pre-registered 2.00x threshold. The result is stable and honestly inconclusive; it is not a confirmed finding.
+- ✅ **CVE-2026-116078 CONFIRMED**: 100k 1-byte DATA frames, vulnerable `1.14.0` median **5.27 MB**, patched `1.14.1` median **0.61 MB**, 3 runs, non-overlapping ranges; detection discriminates via the memory outlier rule.
+- ✅ **VulnForge M1–M7 implemented**: package model/CLI, dynamic lab orchestrator, per-version lockfiles, digest-pinned base image, multi-run validation, offline detection, generated per-CVE/global reports, OSV ingestion with dry-run/apply, commit-diff analysis, triage, a second (toy) target adapter, doctor/clean, CI, and ruff.
+- ⚠️ **CVE-2026-111101 remains `INCONCLUSIVE`.** The corrected pair is `1.13.1` vs `1.14.0` (first fixed). Three runs gave vulnerable median 2.79 MB vs patched 1.75 MB, a **1.60x** reduction, below the pre-registered 2.00x threshold. The recorded commits are a version bump and an unrelated 2020 refactor; the package is not a confirmed finding.
 - ⬜ The remaining 22 advisories have priority scores and analyst notes but no package/probe yet -- Section "Extending" below is the pattern to follow.
 
 **Live lab status (2026-11-04).** All three targets build and run under the
@@ -40,66 +40,78 @@ those two things independently (see `reports/technical-report.md` Section 3)
 and prioritizes research effort by a weighted combination, not by CVSS
 alone.
 
-## VulnForge factory (M1/M2/M3)
+## VulnForge factory (M1–M7)
 
 The project is evolving from a Bandit research repo into **VulnForge**, a
 local-first factory that turns an advisory into a self-contained package:
-advisory, analysis, lab spec, PoC, tests, detection spec, evidence, and report.
-
-The M1/M2/M3 factory is usable now:
+advisory, analysis, lab spec, PoC, tests, detection, evidence, and report.
 
 ```bash
 .venv/bin/pip install -e '.[dev]'
 
+vulnforge doctor
 vulnforge status
-vulnforge package list
-vulnforge package show CVE-2026-116078
 vulnforge package validate
 
-vulnforge lab build CVE-2026-116078
+# Lab + validation + detection + reports
 vulnforge lab start CVE-2026-116078
-vulnforge lab status CVE-2026-116078
-
 vulnforge poc run CVE-2026-116078
 vulnforge validate CVE-2026-116078 --runs 3
+vulnforge detect CVE-2026-116078
+vulnforge report CVE-2026-116078
 vulnforge lab stop CVE-2026-116078
+
+# Intelligence + source analysis
+vulnforge ingest bandit --refresh
+vulnforge analyze CVE-2026-116078 --refresh
+vulnforge triage
+vulnforge triage --check
 ```
 
-Implemented: package discovery, JSON Schema validation, cross-file consistency
-checks, advisory-to-catalog drift detection, the dynamic-port lab orchestrator,
-per-version lockfiles, digest-pinned base image, image/build provenance,
-package-local probes, runtime integration, multi-run medians/variance guards,
-and hash-checked evidence bundles.
+Implemented: package discovery and schema/cross-file validation, dynamic-port
+lab orchestration, per-version lockfiles and digest-pinned images, provenance,
+package-local probes, multi-run medians/variance guards, hash-checked evidence,
+offline detection, generated per-CVE/global reports, OSV ingestion with
+dry-run/apply, commit-diff root-cause scaffolding, triage, a toy second-target
+adapter, doctor/clean, CI, and ruff.
 
-Planned and exposed as explicit stubs: `triage` (version-plan extraction),
-`detect`/`report` (M4), `ingest` (M5). The full design is in
-[`docs/vulnforge-architecture.md`](docs/vulnforge-architecture.md).
+Design and authoring docs:
 
-Gated Docker integration test:
+- [`docs/vulnforge-architecture.md`](docs/vulnforge-architecture.md)
+- [`docs/package-authoring.md`](docs/package-authoring.md)
+- [`docs/adapter-authoring.md`](docs/adapter-authoring.md)
+- [`docs/ingestion.md`](docs/ingestion.md)
+- [`docs/verdicts.md`](docs/verdicts.md)
+- [`docs/ci.md`](docs/ci.md)
+
+Gated Docker integration tests:
 
 ```bash
 VULNFORGE_DOCKER=1 .venv/bin/python -m unittest tests.test_lab_integration -v
+VULNFORGE_DOCKER=1 .venv/bin/python -m unittest \
+  tests.test_adapter_contract.ToyAdapterDockerTests -v
 ```
 
 ## Layout
 
 ```
-data/                   advisories.json (source of truth), generated matrix/checkpoints
+data/                   advisories.json (catalog), generated matrix/checkpoints, raw snapshots
 triage/                 version_resolver.py, prioritizer.py
-src/vulnforge/          factory package: CLI, config, models, schemas, package validation
+src/vulnforge/          factory package: CLI, lab, probe, validate, detect, report, ingest, triage, doctor
 vulnerabilities/        one self-contained package per CVE
-schemas/                JSON Schemas for advisory/package/lab/probe/validation/detection/evidence
-docs/                   architecture and authoring docs
+schemas/                JSON Schemas for advisory/package/lab/probe/validation/detection/evidence/provenance
+docs/                   architecture, package/adapter, ingestion, verdict, CI docs
 lab/                    app/ (version-parameterized Plug+Bandit app), app/locks/, compose.yaml
+targets/toy/            non-Bandit adapter proof target
 .vulnforge/             generated per-package lab compose/runtime state (gitignored)
-probes/                 common.py (guardrails + memory sampler), registry.py (single PoC registry), http1/, http2/
-tests/regression/       compare_versions.py -- vulnerable-vs-patched assertions
-tests/detection/        thresholds.py -- behavioral detection rules + self-test
-tests/                  resolver, package, CLI, schema, lab-plan, validation, golden tests
+probes/                 legacy probes/common.py + registry.py (pre-M3 harness)
+tests/regression/       legacy compare_versions.py
+tests/detection/        thin self-test wrapper around vulnforge.detect.rules
+tests/                  resolver, package, CLI, schema, lab, validation, detection, report, ingest, adapter tests
 reports/                generate_report.py -> technical-report.md, vulnerability-matrix.csv
-evidence/metrics/       historical single-run regression results
-vulnerabilities/<CVE>/evidence/  M3 validation bundle (validation.json, runs, telemetry, logs)
-config/                 research.yaml (targets, versions), lab-limits.yaml (isolation policy), vulnforge.yaml
+vulnerabilities/<CVE>/evidence/  validation + runs + telemetry + logs + hashes
+config/                 research.yaml, lab-limits.yaml, vulnforge.yaml
+.github/workflows/      CI: unit/schema/validation/report drift/lint + gated Docker integration
 ```
 
 ## Quick start
@@ -111,7 +123,7 @@ steps), see [`usage.md`](usage.md).
 # 0. Create and activate a venv, then install the factory (editable)
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
-pip install -e '.[dev]'          # runtime deps + jsonschema + pytest + vulnforge CLI
+pip install -e '.[dev]'          # runtime deps + jsonschema + pytest + ruff + vulnforge CLI
 
 # 1. Regenerate triage data (already checked in, but reproducible)
 python3 triage/version_resolver.py   # both checkpoints and per-version map
@@ -127,10 +139,12 @@ curl http://127.0.0.1:4100/healthz   # vulnerable (1.13.1)
 curl http://127.0.0.1:4120/healthz   # interim (1.14.0)
 curl http://127.0.0.1:4110/healthz   # patched (1.14.1)
 
-# 3. Package lab, probe, and multi-run validation
+# 3. Package lab, probe, validation, detection, report
 vulnforge lab start CVE-2026-116078
 python3 vulnerabilities/CVE-2026-116078/poc/exploit.py --role both
 vulnforge validate CVE-2026-116078 --runs 3
+vulnforge detect CVE-2026-116078
+vulnforge report CVE-2026-116078
 vulnforge lab stop CVE-2026-116078
 
 # 4. Legacy single-run harness against the fixed-port lab
@@ -167,8 +181,9 @@ Full policy: `config/lab-limits.yaml`.
    `1.13.1` checkpoint is actually vulnerable to it. If it is fixed before
    1.13.1, add the matching older checkpoint image first.
 2. Read its analyst note in `triage/prioritizer.py` (`SCORES[cve]["notes"]`)
-   and its fixing commit diff on GitHub (linked from the advisory and from
-   `data/advisories.json`) to pin down the exact mechanism.
+   and run `vulnforge analyze <CVE> --refresh` to capture the fixing commit
+   diffs and generate a root-cause scaffold. Review the diff; the recorded
+   commits are not always the real fix.
 3. Copy the closest existing package probe under
    `vulnerabilities/<CVE>/poc/exploit.py` as a starting point -- the
    HTTP/1 and HTTP/2 amplification probes share an in-flight
@@ -181,8 +196,9 @@ Full policy: `config/lab-limits.yaml`.
    Bandit alone -- see the analyst note on CVE-2026-114216.
 4. Declare the probe in `vulnerabilities/<CVE>/poc/manifest.json` with the
    correct vulnerable/patched target names, metric, and thresholds.
-5. Run `vulnforge validate <CVE> --runs 3`, then regenerate the report.
-   Section 5 of the report reads package validation evidence automatically.
+5. Run `vulnforge validate <CVE> --runs 3`, then `vulnforge detect <CVE>`
+   and `vulnforge report <CVE>`. The global report reads package validation
+   and detection evidence automatically.
 
 ## Best practices this scaffold enforces
 
@@ -207,5 +223,13 @@ Full policy: `config/lab-limits.yaml`.
   `INCONCLUSIVE`, and `ERROR`.
 - Evidence bundles include raw runs, `/admin/stats` telemetry, container logs,
   image IDs, and SHA-256 hashes; reports are generated from the bundle.
+- Detection is offline rule evaluation over captured evidence, not a
+  production IDS claim. It reports per-target trigger results and only calls a
+  signal discriminating when it fires on vulnerable and not patched.
+- Ingestion is dry-run by default: raw snapshots + proposed catalog + diff,
+  with explicit `--apply`; source analysis never overwrites human-written
+  root-cause notes.
+- The adapter boundary is tested with a non-Bandit toy target (`targets/toy/`),
+  so Bandit-specific behavior stays out of the core.
 - Lab containers are disposable, capability-dropped, resource-capped, and
   loopback-only by default.

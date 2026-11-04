@@ -21,3 +21,7 @@ targets:
     adapter: vulnforge.targets.bandit:BanditAdapter
     app_dir: lab/app
     limits: config/lab-limits.yaml
+  toy:
+    adapter: vulnforge.targets.toy:ToyAdapter
+    app_dir: targets/toy
+    limits: config/lab-limits.yaml
