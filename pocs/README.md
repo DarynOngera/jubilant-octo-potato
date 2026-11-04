@@ -1,17 +1,22 @@
 # PoC index
 
-Implemented PoCs live next to the harness code in `probes/`, since each one
-depends on `probes/common.py` for target resolution and lab-isolation
-guardrails. This file is the index the deliverable list promised.
+Package-local PoCs live under `vulnerabilities/<CVE>/poc/` and are run by the
+M3 validator (`vulnforge validate`). The older scripts under `probes/` remain
+for the legacy single-run harness and historical comparison.
 
-| CVE | Script | Regression pair | Latest live A/B |
+| CVE | Script | Pair | Latest M3 result |
 |---|---|---|---|
-| [CVE-2026-111101](../reports/technical-report.md#cve-2026-111101) | [`probes/http1/poc_111101_chunk_amplification.py`](../probes/http1/poc_111101_chunk_amplification.py) | vulnerable `1.13.1` vs patched `1.14.1` | **INCONCLUSIVE** -- both versions show per-chunk growth; metric does not isolate the fix |
-| [CVE-2026-116078](../reports/technical-report.md#cve-2026-116078) | [`probes/http2/poc_116078_data_frame_amplification.py`](../probes/http2/poc_116078_data_frame_amplification.py) | interim `1.14.0` vs patched `1.14.1` | **CONFIRMED** -- historical single run 8.90x vs 0.58x; M3 multi-run median pending (a later single run was noisy) |
+| [CVE-2026-116078](../reports/technical-report.md#cve-2026-116078) | [`vulnerabilities/CVE-2026-116078/poc/exploit.py`](../vulnerabilities/CVE-2026-116078/poc/exploit.py) | vulnerable `1.14.0` vs patched `1.14.1` | **CONFIRMED** — 3 runs, 100k 1-byte DATA frames; vulnerable median 8.03 MB, patched median 0.55 MB |
+| [CVE-2026-111101](../reports/technical-report.md#cve-2026-111101) | [`vulnerabilities/CVE-2026-111101/poc/exploit.py`](../vulnerabilities/CVE-2026-111101/poc/exploit.py) | vulnerable `1.13.1` vs patched `1.14.0` | **INCONCLUSIVE** — 3 runs, 20k 1-byte chunks; corrected first-fixed pair shows 1.60x reduction, below the pre-registered 2.00x threshold |
 
-Both require the lab running first (`docker compose -f lab/compose.yaml up -d`,
-which starts the interim 1.14.0 target as well). Registry entries live in
-`probes/registry.py`; raw results are in `evidence/metrics/`.
+Run the M3 validator after starting the lab:
 
-See `README.md` "Extending to the remaining advisories" for the pattern to
-add PoCs for the other 22.
+```bash
+vulnforge lab start CVE-2026-116078
+vulnforge validate CVE-2026-116078 --runs 3
+vulnforge lab stop CVE-2026-116078
+```
+
+Evidence bundles are under `vulnerabilities/<CVE>/evidence/`. The legacy
+registry remains in `probes/registry.py`; the package manifests are the M3
+source of truth.

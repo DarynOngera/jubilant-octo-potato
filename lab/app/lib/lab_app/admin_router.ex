@@ -13,8 +13,26 @@ defmodule LabApp.AdminRouter do
     send_resp(conn, 200, Jason.encode!(snapshot()))
   end
 
+  # Force a full-BEAM garbage collection before a probe baseline. Without
+  # this, a previous attack run can leave enough residual memory to inflate
+  # the control baseline and make the patched target look noisy. This endpoint
+  # is lab-only: it is intentionally absent from LabApp.Router.
+  post "/gc" do
+    gc_all()
+    send_resp(conn, 200, Jason.encode!(%{status: "ok"}))
+  end
+
   match _ do
     send_resp(conn, 404, "not found")
+  end
+
+  defp gc_all do
+    Process.list()
+    |> Enum.each(fn pid ->
+      if Process.alive?(pid) do
+        :erlang.garbage_collect(pid)
+      end
+    end)
   end
 
   def snapshot do

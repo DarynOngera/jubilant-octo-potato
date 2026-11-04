@@ -1,12 +1,14 @@
-"""VulnForge CLI (M1/M2 surface).
+"""VulnForge CLI (M1/M2/M3 surface).
 
 Implemented now:
   vulnforge status
   vulnforge package list|show|validate
   vulnforge lab build|start|stop|status
+  vulnforge poc run
+  vulnforge validate
 
 The remaining factory commands are deliberately stubs until their milestone:
-  ingest (M5), triage (M2), poc (M3), validate (M3),
+  ingest (M5), triage (M2 version-plan extraction),
   detect (M4), report (M4)
 """
 from __future__ import annotations
@@ -25,7 +27,9 @@ from .lab import LabOrchestrator
 from .models import Package
 from .packages import find_package, load_packages, validate_package
 from .paths import Paths, find_repo_root
+from .probe import ProbeResult, ProbeTarget, load_probe
 from .targets.loader import load_adapter
+from .validate import load_runtime, run_validation
 
 
 def _package_row(pkg: Package) -> list[str]:
@@ -263,6 +267,108 @@ def _cmd_lab(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
     return 2
 
 
+def _cmd_poc(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
+    try:
+        pkg = find_package(paths, args.cve)
+    except PackageError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    errors = validate_package(pkg, paths)
+    if errors:
+        print(f"package {pkg.cve} is invalid:", file=sys.stderr)
+        for error in errors:
+            print(f"  - {error}", file=sys.stderr)
+        return 1
+    if pkg.manifest is None or pkg.probe is None:
+        print(f"error: {pkg.cve} has no probe manifest", file=sys.stderr)
+        return 1
+
+    runtime, runtime_path = load_runtime(paths, pkg.cve)
+    probe = load_probe(pkg.root, pkg.probe)
+    roles = ["vulnerable", "patched"] if args.role == "both" else [args.role]
+    records: list[dict[str, Any]] = []
+    for role in roles:
+        service = runtime.services.get(role)
+        if service is None:
+            print(f"error: runtime has no {role!r} service", file=sys.stderr)
+            return 1
+        target = ProbeTarget.from_service(service)
+        result = ProbeResult.coerce(probe(target, **pkg.probe.kwargs))
+        record = {
+            "role": role,
+            "target": target.name,
+            "version": service.version,
+            "metrics": result.metrics,
+            "observations": result.observations,
+            "duration_s": result.duration_s,
+            "sample_count": result.sample_count,
+            "errors": result.errors,
+            "raw": result.raw,
+        }
+        records.append(record)
+        if not args.json:
+            metrics = " ".join(
+                f"{key}={value:.4g}" for key, value in result.metrics.items()
+            )
+            print(
+                f"{role:<10} {service.name:<10} {service.version:<10} "
+                f"{metrics} samples={result.sample_count}"
+            )
+
+    if args.json:
+        print(json.dumps(records, indent=2, default=str))
+    print(f"  runtime: {runtime_path}")
+    return 0
+
+
+def _cmd_validate(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
+    try:
+        pkg = find_package(paths, args.cve)
+    except PackageError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    errors = validate_package(pkg, paths)
+    if errors:
+        print(f"package {pkg.cve} is invalid:", file=sys.stderr)
+        for error in errors:
+            print(f"  - {error}", file=sys.stderr)
+        return 1
+    if args.runs is not None and args.runs < 1:
+        print("error: --runs must be >= 1", file=sys.stderr)
+        return 2
+
+    result = run_validation(
+        pkg,
+        cfg,
+        paths,
+        runs=args.runs,
+        aa_control=args.aa_control,
+        capture_logs=not args.no_logs,
+    )
+    validation = result["validation"]
+
+    if args.json:
+        print(json.dumps(validation, indent=2, default=str))
+    else:
+        print(f"{pkg.cve}: {validation['verdict']}")
+        print(f"  reason: {validation['reason']}")
+        for role in ("vulnerable", "patched"):
+            summary = validation["targets"][role]["summary"]
+            print(
+                f"  {role:<10} median={summary['median']:.2f} "
+                f"min={summary['min']:.2f} max={summary['max']:.2f} "
+                f"cv={summary['cv']:.2%} n={summary['count']}"
+            )
+        ratio = validation["aggregates"].get("ratio")
+        if ratio is not None:
+            print(f"  relative reduction: {ratio:.2f}x")
+        print(f"  evidence: {result['execution_path']}")
+        print(f"  validation: {result['validation_path']}")
+        print(f"  package status updated by the validator")
+
+    return 0 if validation["verdict"] == "CONFIRMED" else 1
+
+
 def _planned(name: str, milestone: str):
     def handler(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
         print(
@@ -344,10 +450,36 @@ def build_parser() -> argparse.ArgumentParser:
     lab_status.add_argument("--json", action="store_true", help="emit JSON")
     lab_status.set_defaults(func=_cmd_lab)
 
+    poc = subparsers.add_parser("poc", help="run a package PoC against its runtime")
+    poc_sub = poc.add_subparsers(dest="poc_command", required=True)
+    poc_run = poc_sub.add_parser("run", help="run the probe once")
+    poc_run.add_argument("cve", help="CVE identifier")
+    poc_run.add_argument(
+        "--role", choices=["vulnerable", "patched", "both"], default="both"
+    )
+    poc_run.add_argument("--json", action="store_true", help="emit JSON")
+    poc_run.set_defaults(func=_cmd_poc)
+
+    validate = subparsers.add_parser(
+        "validate", help="run multi-run A/B validation and write evidence"
+    )
+    validate.add_argument("cve", help="CVE identifier")
+    validate.add_argument(
+        "--runs", type=int, default=None, help="override the manifest run count"
+    )
+    validate.add_argument(
+        "--aa-control",
+        action="store_true",
+        help="run the vulnerable target twice per repetition and record A/A ratios",
+    )
+    validate.add_argument(
+        "--no-logs", action="store_true", help="skip container log capture"
+    )
+    validate.add_argument("--json", action="store_true", help="emit JSON")
+    validate.set_defaults(func=_cmd_validate)
+
     _add_planned(subparsers, "ingest", "M5", "ingest advisory intelligence (M5)")
     _add_planned(subparsers, "triage", "M2", "recompute versions and priorities (M2)")
-    _add_planned(subparsers, "poc", "M3", "run a package PoC (M3)")
-    _add_planned(subparsers, "validate", "M3", "run the A/B validation harness (M3)")
     _add_planned(subparsers, "detect", "M4", "run detection rules (M4)")
     _add_planned(subparsers, "report", "M4", "render package/global reports (M4)")
 

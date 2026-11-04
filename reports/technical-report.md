@@ -101,7 +101,7 @@ CVSS answers 'how bad if it fires, under worst-case assumptions.' It does not an
 - Research priority: **8.75** (I=8 E=9 R=10 D=9) -- E4 - low complexity, unauthenticated, remote
 - Analyst note: Plain HTTP/1.1, no TLS/ALPN juggling, no auth, no special client lib. Single connection, trickle 1-byte chunks. Easiest PoC in the set.
 - Fixing commit(s): [`220b9dfd27`](https://github.com/mtrudel/bandit/commit/220b9dfd27f9a21305be2afc75cbe585ddc24e7a), [`7201270c34`](https://github.com/mtrudel/bandit/commit/7201270c34b90f6c9e15c0386c2bb802c0c72ab4)
-- PoC status: **implemented** -- `probes/http1/poc_111101_chunk_amplification.py`
+- PoC status: **implemented** -- `vulnerabilities/CVE-2026-111101/poc/exploit.py`
 
 ### CVE-2026-39803
 
@@ -129,7 +129,7 @@ CVSS answers 'how bad if it fires, under worst-case assumptions.' It does not an
 - Research priority: **7.9** (I=8 E=7 R=9 D=9) -- E3 - straightforward protocol interaction
 - Analyst note: Needs an HTTP/2 client (h2) but otherwise a single stream of 1-byte DATA frames; very clean memory signal, good PoC candidate.
 - Fixing commit(s): [`327bb02ff8`](https://github.com/mtrudel/bandit/commit/327bb02ff84171237e1aeff787930debd16155ee), [`c8dc1e9705`](https://github.com/mtrudel/bandit/commit/c8dc1e97050cf359f61ed6cdd110f3cdaf1d6f5f)
-- PoC status: **implemented** -- `probes/http2/poc_116078_data_frame_amplification.py`
+- PoC status: **implemented** -- `vulnerabilities/CVE-2026-116078/poc/exploit.py`
 
 ### CVE-2026-108525
 
@@ -427,23 +427,22 @@ CVSS answers 'how bad if it fires, under worst-case assumptions.' It does not an
 
 ## 5. PoC coverage and how to extend it
 
-2 PoCs are registered in `probes/registry.py` and run by `tests/regression/compare_versions.py` against the vulnerable and patched targets in the same invocation:
+2 package probes are implemented under `vulnerabilities/*/poc/` and run by `vulnforge validate`. The legacy `probes/registry.py` harness remains for historical comparison.
 
-- `CVE-2026-111101` -> `probes/http1/poc_111101_chunk_amplification.py` (vulnerable `vulnerable` vs patched `patched`)
-- `CVE-2026-116078` -> `probes/http2/poc_116078_data_frame_amplification.py` (vulnerable `interim` vs patched `patched`)
+- `CVE-2026-111101` -> `vulnerabilities/CVE-2026-111101/poc/exploit.py` (vulnerable `vulnerable` vs patched `interim`; metric `attack_memory_delta`)
+- `CVE-2026-116078` -> `vulnerabilities/CVE-2026-116078/poc/exploit.py` (vulnerable `interim` vs patched `patched`; metric `attack_memory_delta`)
 
-Latest live A/B results (`evidence/metrics/regression-results.json`):
+M3 multi-run results (`vulnerabilities/*/evidence/validation.json`):
 
-| CVE | Vulnerable target | Patched target | Vulnerable amp | Patched amp | Verdict |
-|---|---|---|---|---|---|
-| `CVE-2026-111101` | `vulnerable` | `patched` | 1.01x | 0.37x | **INCONCLUSIVE** |
-| `CVE-2026-116078` | `interim` | `patched` | 8.90x | 0.58x | **CONFIRMED** |
+| CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict |
+|---|---|---|---|---|---|---|
+| `CVE-2026-111101` | `1.13.1` -> `1.14.0` | `attack_memory_delta` | 2.67 MiB | 1.67 MiB | 3 | **INCONCLUSIVE** |
+| `CVE-2026-116078` | `1.14.0` -> `1.14.1` | `attack_memory_delta` | 7.66 MiB | 0.52 MiB | 3 | **CONFIRMED** |
 
-A non-`CONFIRMED` verdict is a real result, not a reporting gap: `compare_versions.py` exits non-zero for `INCONCLUSIVE` and `FAIL` because a probe that stops reproducing is as important as a patch that does not hold.
+Verdicts are median-based with a patched-CV guard; run ranges must not overlap in absolute mode. A non-`CONFIRMED` verdict is a real result, not a reporting gap.
+- `CVE-2026-111101`: INCONCLUSIVE -- relative reduction 1.60x is below the pre-registered 2.00x threshold
 
-These are single-run measurements from the pre-factory harness. The VulnForge M3 validator will replace them with repeated runs, medians, and a variance guard; treat any single run as provisional.
-
-The next-highest-priority item that is still vulnerable at the lab's `1.13.1` checkpoint is **CVE-2026-108525** (HTTP/2 inbound flow control is not enforced, letting a client queue unbounded DATA in stream processes in Bandit). Add its probe module under `probes/`, register it in `probes/registry.py`, and re-run `tests/regression/compare_versions.py`.
+The next-highest-priority item that is still vulnerable at the lab's `1.13.1` checkpoint is **CVE-2026-108525** (HTTP/2 inbound flow control is not enforced, letting a client queue unbounded DATA in stream processes in Bandit). Add its package under `vulnerabilities/`, register the probe in `poc/manifest.json`, and re-run `vulnforge validate`.
 
 12 remaining advisories are fixed before `1.13.1` (for example CVE-2026-39803, CVE-2026-39806, CVE-2026-105659, CVE-2026-42786) and cannot be reproduced against the current "vulnerable" container. Add the corresponding older checkpoint version from `data/lab-checkpoints.json` before implementing those PoCs.
 

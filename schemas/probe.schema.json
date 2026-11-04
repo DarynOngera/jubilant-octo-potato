@@ -37,7 +37,9 @@
         "vulnerable_min": {"type": "number"},
         "patched_max": {"type": "number"},
         "min_samples": {"type": "integer", "minimum": 1},
-        "max_cv": {"type": "number", "minimum": 0}
+        "max_cv": {"type": "number", "minimum": 0},
+        "mode": {"enum": ["absolute", "relative"]},
+        "min_ratio": {"type": "number", "exclusiveMinimum": 0}
       }
     },
     "runs": {"type": "integer", "minimum": 1},

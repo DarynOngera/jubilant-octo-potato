@@ -41,15 +41,21 @@ curl http://127.0.0.1:4100/healthz   # 1.13.1
 curl http://127.0.0.1:4120/healthz   # 1.14.0
 curl http://127.0.0.1:4110/healthz   # 1.14.1
 
-# 5. Live A/B regression
+# 5. Factory A/B validation (dynamic lab, 3 runs)
+vulnforge lab start CVE-2026-116078
+vulnforge validate CVE-2026-116078 --runs 3
+vulnforge lab stop CVE-2026-116078
+
+# 6. Legacy single-run harness (historical comparison)
 .venv/bin/python tests/regression/compare_versions.py \
   --all --json-out evidence/metrics/regression-results.json
 ```
 
-The regression command exits non-zero unless **every** probe is
-`CONFIRMED`. As of 2026-11-04, `--all` exits `1` because CVE-2026-111101 is
-`INCONCLUSIVE`; use `--cve CVE-2026-116078` for a currently green run. See
-[Regression harness](#regression-harness) for verdicts.
+`vulnforge validate` exits non-zero unless the verdict is `CONFIRMED`. As of
+2026-11-04, CVE-2026-116078 is `CONFIRMED` and CVE-2026-111101 is
+`INCONCLUSIVE` at a 1.60x reduction. See [Regression harness](#regression-harness)
+for verdicts and [Factory validation](#factory-validation-m3) for the
+multi-run workflow.
 
 ---
 
@@ -62,14 +68,17 @@ The regression command exits non-zero unless **every** probe is
 | `data/lab-checkpoints.json` | Generated: deduplicated A/B checkpoint plan |
 | `data/vulnerability-matrix.json` | Generated: priority-scored advisory matrix |
 | `src/vulnforge/` | Factory package: CLI, config, models, schemas, package validation |
+| `src/vulnforge/probe/` | Probe protocol, target model, memory sampler, budgets |
+| `src/vulnforge/validate/` | Multi-run statistics, verdict logic, evidence bundling |
 | `vulnerabilities/` | Self-contained research packages, one directory per CVE |
+| `vulnerabilities/<CVE>/evidence/` | M3 validation bundle: runs, telemetry, logs, hashes |
 | `schemas/` | JSON Schemas for advisory, package, lab, probe, validation, detection, evidence |
 | `docs/` | Architecture and authoring documentation |
 | `triage/version_resolver.py` | Multi-range parser, exposure map, checkpoints |
 | `triage/prioritizer.py` | I/E/R/D scores + `priority_P` ranking |
 | `reports/generate_report.py` | Builds `reports/technical-report.md` |
 | `probes/common.py` | Target guardrails, budgets, in-flight memory sampler |
-| `probes/registry.py` | Single registry of PoCs, target pairs, thresholds |
+| `probes/registry.py` | Legacy single-run registry (historical; package manifests are M3 source of truth) |
 | `tests/regression/compare_versions.py` | Runs each PoC against its A/B pair |
 | `tests/detection/thresholds.py` | Four behavioral detection rules + self-test |
 | `tests/test_version_resolver.py` | 18 range/parser/checkpoint unit tests |
@@ -89,7 +98,7 @@ Generated artifacts should not be hand-edited; re-run the generator.
 
 ---
 
-## VulnForge factory CLI (M1/M2)
+## VulnForge factory CLI (M1/M2/M3)
 
 The factory package is installed editable with `pip install -e '.[dev]'`.
 It is also runnable as `python -m vulnforge`.
@@ -115,6 +124,12 @@ vulnforge lab start CVE-2026-116078
 vulnforge lab status CVE-2026-116078
 vulnforge lab status CVE-2026-116078 --json
 vulnforge lab stop CVE-2026-116078
+
+# Probe and multi-run validation (M3)
+vulnforge poc run CVE-2026-116078
+vulnforge poc run CVE-2026-116078 --role patched --json
+vulnforge validate CVE-2026-116078 --runs 3
+vulnforge validate CVE-2026-116078 --runs 3 --aa-control
 ```
 
 `vulnforge package validate` checks:
@@ -136,16 +151,14 @@ The remaining factory commands are explicit stubs:
 
 | Command | Planned milestone |
 |---|---|
-| `vulnforge triage` | M2 (version-plan extraction) |
-| `vulnforge poc` | M3 |
-| `vulnforge validate` | M3 |
+| `vulnforge triage` | version-plan extraction |
 | `vulnforge detect` | M4 |
 | `vulnforge report` | M4 |
 | `vulnforge ingest` | M5 |
 
-`vulnforge lab` is implemented in M2. The stubs exit `2` with a message naming
-the milestone; they do not silently do nothing. See
-`docs/vulnforge-architecture.md` for the full design.
+`vulnforge lab`, `vulnforge poc`, and `vulnforge validate` are implemented in
+M2/M3. The stubs exit `2` with a message naming the milestone; they do not
+silently do nothing. See `docs/vulnforge-architecture.md` for the full design.
 
 ### Package layout
 
@@ -159,8 +172,17 @@ vulnerabilities/CVE-2026-116078/
 ├── tests/
 ├── detection/
 ├── evidence/
+│   ├── execution.json
+│   ├── validation.json
+│   ├── runs/
+│   ├── telemetry/
+│   └── logs/
 └── report.md
 ```
+
+The same structure exists for `CVE-2026-111101`. Package probes are the M3
+source of truth; `probes/registry.py` remains for the legacy single-run
+harness.
 
 `data/advisories.json` is still the global source of truth in M0–M4. The
 package `advisory.json` is a materialized, drift-checked view; M5 flips the
@@ -229,10 +251,11 @@ when introducing a new advisory.
 ```
 
 Reads `data/advisories.json`, `data/vulnerability-matrix.json`,
-`config/research.yaml`, and `probes/registry.py`. If
-`evidence/metrics/regression-results.json` exists, Section 5 includes the
-latest live A/B verdicts. Re-run this after changing advisories, scores,
-PoCs, or regression results.
+`config/research.yaml`, `probes/registry.py`, package `poc/manifest.json`
+files, and package `evidence/validation.json` files. Section 5 includes the
+latest M3 multi-run verdicts and falls back to legacy single-run results only
+when no package validation exists. Re-run this after changing advisories,
+scores, PoCs, or validation evidence.
 
 Typical full regeneration:
 
@@ -248,7 +271,7 @@ Typical full regeneration:
 ## 2. Tests and detection self-test
 
 ```bash
-# All Python unit tests (52 currently; 1 Docker integration test skipped by default)
+# All Python unit tests (76 currently; 1 Docker integration test skipped by default)
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 
 # Real Docker build/start/status/stop for the first package
@@ -358,83 +381,93 @@ docker port bandit-vulnerable
 
 ## 4. Running a PoC directly
 
-```bash
-# CVE-2026-111101: HTTP/1 1-byte chunks
-.venv/bin/python probes/http1/poc_111101_chunk_amplification.py \
-  --n-chunks 20000 --pace-ms 1 --target both
+Package probes read the dynamic runtime written by `vulnforge lab start`:
 
-# CVE-2026-116078: HTTP/2 1-byte DATA frames
-.venv/bin/python probes/http2/poc_116078_data_frame_amplification.py \
-  --n-frames 20000 --pace-ms 0 --target both
+```bash
+vulnforge lab start CVE-2026-116078
+python vulnerabilities/CVE-2026-116078/poc/exploit.py --role both
+vulnforge poc run CVE-2026-116078
+vulnforge lab stop CVE-2026-116078
 ```
 
-`--target both` is **not** always 1.13.1 vs 1.14.1:
+For the HTTP/1 package:
 
-| Probe | `both` expands to |
-|---|---|
-| `poc_111101...` | vulnerable `1.13.1` vs patched `1.14.1` |
-| `poc_116078...` | interim `1.14.0` vs patched `1.14.1` |
+```bash
+vulnforge lab start CVE-2026-111101
+python vulnerabilities/CVE-2026-111101/poc/exploit.py --role both
+vulnforge poc run CVE-2026-111101
+vulnforge lab stop CVE-2026-111101
+```
 
-Single targets are refused by default because
-`config/lab-limits.yaml` sets `require_patched_control: true`. Use
-`--target both`, or the regression harness (which pairs targets
-explicitly and passes `allow_single=True` internally).
+The legacy probes under `probes/` remain for the old harness. Their
+`--target both` mapping is not the package pair; use the package manifests for
+the authoritative vuln/patched versions.
 
-The PoCs print a summary but do **not** assert a verdict; the regression
-harness is what turns a run into pass/fail. Each run enforces:
+Each run enforces:
 
 - `max_request_bytes_total: 268435456` (256 MiB)
 - `max_duration_seconds: 120`
 
-If a run is too large, reduce the chunk/frame count or pacing.
-
-> A run that completes in under ~50 ms may yield only one memory sample.
-> That is a measurement limitation, not proof the bug is fixed. Increase
-> `--pace-ms` or the count for a stable peak.
+If a run is too large, reduce the chunk/frame count or pacing. A run that
+completes too fast may yield too few memory samples; use the package manifest's
+parameters (100k frames for 116078, 20k chunks at 1 ms for 111101).
 
 ---
 
-## 5. Regression harness
+## 5. Factory validation (M3)
 
 ```bash
-# One CVE (errors if it is not registered)
-.venv/bin/python tests/regression/compare_versions.py --cve CVE-2026-116078
+vulnforge lab start CVE-2026-116078
+vulnforge validate CVE-2026-116078 --runs 3
+vulnforge lab stop CVE-2026-116078
+```
 
-# Every registered probe
+`vulnforge validate`:
+
+1. Reads `.vulnforge/labs/<cve>/runtime.json` (start the lab first).
+2. Loads the package probe from `poc/manifest.json`.
+3. Runs the probe N times against vulnerable and patched targets.
+4. Computes median, min, max, stdev, and CV per target.
+5. Applies the verdict predicate from the manifest.
+6. Writes `evidence/validation.json`, `evidence/runs/`,
+   `evidence/telemetry/`, `evidence/logs/`, and a hash-checked
+   `evidence/execution.json`.
+7. Updates the package status/verdict in `package.json`.
+
+Verdict modes:
+
+- **absolute** — vulnerable median >= minimum, patched median <= maximum,
+  non-overlapping run ranges, patched CV within the guard.
+- **relative** — vulnerable/patched median ratio >= the pre-registered minimum.
+
+`vulnforge validate` exits `0` only for `CONFIRMED`; `FAIL`, `INCONCLUSIVE`,
+and `ERROR` exit `1`.
+
+### Current multi-run results (2026-11-04)
+
+| CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict |
+|---|---|---|---|---:|---:|---|---|
+| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 8.03 MB | 0.55 MB | 3 | **CONFIRMED** |
+| CVE-2026-111101 | 1.13.1 -> 1.14.0 | attack memory | 2.80 MB | 1.75 MB | 3 | **INCONCLUSIVE** |
+
+CVE-2026-116078: run ranges do not overlap (vulnerable 5.16–9.99 MB, patched
+0.52–0.59 MB).
+
+CVE-2026-111101: the corrected first-fixed pair shows a stable **1.60x**
+reduction, below the pre-registered 2.00x threshold. This is an honest
+inconclusive result, not a confirmed finding.
+
+### Legacy single-run harness
+
+```bash
+.venv/bin/python tests/regression/compare_versions.py --cve CVE-2026-116078
 .venv/bin/python tests/regression/compare_versions.py \
   --all --json-out evidence/metrics/regression-results.json
 ```
 
-For each CVE it reads `probes/registry.py`, runs the probe against the
-registered vulnerable and patched targets, then compares the
-amplification factors:
-
-| Verdict | Meaning |
-|---|---|
-| `CONFIRMED` | Vulnerable amp >= `vulnerable_min_amplification` **and** patched amp <= `patched_max_amplification` |
-| `FAIL` | Patched target is still above `patched_max_amplification` |
-| `INCONCLUSIVE` | Vulnerable target is below `vulnerable_min_amplification`; preconditions or measurement need work |
-
-Exit status is `0` only if every result is `CONFIRMED`. Both `FAIL` and
-`INCONCLUSIVE` exit `1`: a probe that stops reproducing is as important
-as a patch that does not hold.
-
-### Current live results (2026-11-04)
-
-| CVE | Pair | Vulnerable | Patched | Verdict |
-|---|---|---|---|---|
-| CVE-2026-116078 | 1.14.0 vs 1.14.1 | 8.90x | 0.58x | **CONFIRMED** |
-| CVE-2026-111101 | 1.13.1 vs 1.14.1 | 1.01x | 0.37x | **INCONCLUSIVE** |
-
-CVE-2026-111101 is implemented but **not** a confirmed finding. At 20k
-chunks with pacing, both 1.13.1 and 1.14.1 grow by megabytes against the
-large-chunk control, so the current metric does not isolate the 1.14.0
-fix. See `reports/lab-runtime-fixes.md`.
-
-These are single-run measurements. A later single run of 116078 returned
-patched 2.71x (a `FAIL` under the single-run predicate), while a three-run
-dynamic-lab sample gave patched median 0.72x. M3 replaces single runs with
-medians and a variance guard; treat any single run as provisional.
+The legacy harness still uses `probes/registry.py` and single-run amplification
+factors. It is retained for historical comparison; the M3 package validator is
+the authoritative path.
 
 ---
 
@@ -472,38 +505,48 @@ The resolver raises loudly if a `fixed_in` version is absent from
 
 ### Add a PoC
 
-1. Create a module under `probes/http1/`, `probes/http2/`, etc.
-2. Use `probes/common.py`:
+1. Create `vulnerabilities/<CVE>/poc/exploit.py`.
+2. Implement `run(target, **kwargs) -> ProbeResult` using
+   `vulnforge.probe`:
 
-   - `require_lab_target(...)` (never accept an arbitrary host/port)
+   - `ProbeTarget` (runtime-derived host/port/admin URL)
    - `MemorySampler` to capture peak in-flight `erlang_memory.total`
+   - `enforce_loopback(...)`
    - `validate_payload_budget(...)` and `validate_duration_budget(...)`
-   - `Timer`, `Target`
+   - `Timer`
 
-3. Register it in `probes/registry.py`:
+3. Declare the probe in `vulnerabilities/<CVE>/poc/manifest.json`:
 
-   ```python
-   "CVE-2026-XXXXXX": dict(
-       module=REPO_ROOT / "probes" / "http1" / "poc_XXXXXX.py",
-       func="run",
-       kwargs=dict(n_chunks=20000, pace_ms=0),
-       vulnerable_min_amplification=3.0,
-       patched_max_amplification=1.5,
-       vulnerable_target="vulnerable",  # or "interim"
-       patched_target="patched",
-   )
+   ```json
+   {
+     "schema_version": "1.0",
+     "cve": "CVE-2026-XXXXXX",
+     "entrypoint": "poc.exploit:run",
+     "targets": {"vulnerable": "vulnerable", "patched": "patched"},
+     "kwargs": {"n_chunks": 20000, "pace_ms": 0},
+     "metric": "attack_memory_delta",
+     "thresholds": {
+       "vulnerable_min": 1000000,
+       "patched_max": 1000000,
+       "min_samples": 3,
+       "max_cv": 0.35,
+       "mode": "absolute"
+     },
+     "runs": 3
+   }
    ```
 
-4. Run the harness, then regenerate the report:
+4. Run the package validation and regenerate the report:
 
    ```bash
-   .venv/bin/python tests/regression/compare_versions.py --cve CVE-2026-XXXXXX
+   vulnforge lab start CVE-2026-XXXXXX
+   vulnforge validate CVE-2026-XXXXXX --runs 3
+   vulnforge lab stop CVE-2026-XXXXXX
    .venv/bin/python reports/generate_report.py
    ```
 
-The registry is the single source of truth for the harness and the
-report's PoC-coverage section. Direct-PoC defaults and registry kwargs can
-differ; the harness uses the registry values.
+The package manifest is the source of truth for the M3 validator. The legacy
+`probes/registry.py` remains for the pre-factory harness only.
 
 ---
 
@@ -518,8 +561,11 @@ differ; the harness uses the registry values.
 | `REFUSING: 'x' is a single target` | Use `--target both` or the regression harness. |
 | `REFUSING: estimated wire bytes ...` | Reduce `--n-chunks` / `--n-frames`; the 256 MiB budget is in `config/lab-limits.yaml`. |
 | `REFUSING: paced send would take ...` | Reduce `--pace-ms` or the count; the 120 s budget is in `config/lab-limits.yaml`. |
-| `INCONCLUSIVE` verdict | The vulnerable side did not amplify enough. Increase count/pacing, re-check the target version, or redesign the probe. Do not lower thresholds just to pass. |
-| 111101 shows huge amplification on both targets | Known limitation; see `reports/lab-runtime-fixes.md`. |
+| `no runtime for ...` | Run `vulnforge lab start <CVE>` before `poc run` or `validate`. |
+| `INCONCLUSIVE` verdict | Read `evidence/validation.json` for the reason. Common causes: vulnerable median below the floor, patched CV above the guard, overlapping run ranges, or a relative reduction below the pre-registered ratio. Fix the measurement/probe; do not lower thresholds just to pass. |
+| `INCONCLUSIVE` for CVE-2026-111101 at 1.60x | Expected and honest: the corrected 1.13.1 vs 1.14.0 pair shows a stable 1.60x reduction, below the pre-registered 2.00x threshold. Do not lower the threshold post-hoc. |
+| Evidence hash mismatch | Re-run `vulnforge validate` or `refresh_execution_manifest` after editing evidence; README files are excluded from the hash manifest. |
+| Probe run errors | Inspect `evidence/runs/` and `evidence/logs/`; the validator records `ERROR` and preserves partial evidence. |
 | `--check` reports drift | Re-run `triage/version_resolver.py` (no flags writes both artifacts). |
 
 ---

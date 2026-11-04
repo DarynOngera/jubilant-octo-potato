@@ -42,7 +42,7 @@ REG_RESULTS = REPO_ROOT / "evidence" / "metrics" / "regression-results.json"
 
 
 def load_regression_results() -> list[dict]:
-    """Latest live A/B verdicts, if the harness has been run in this tree."""
+    """Latest legacy single-run A/B verdicts, if the old harness was run."""
     if not REG_RESULTS.exists():
         return []
     try:
@@ -50,6 +50,45 @@ def load_regression_results() -> list[dict]:
     except (json.JSONDecodeError, OSError):
         return []
     return data if isinstance(data, list) else []
+
+
+def load_package_probes() -> dict[str, dict]:
+    probes: dict[str, dict] = {}
+    for path in sorted((REPO_ROOT / "vulnerabilities").glob("*/poc/manifest.json")):
+        try:
+            data = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(data, dict) and data.get("cve"):
+            probes[str(data["cve"])] = data
+    return probes
+
+
+def load_package_validations() -> list[dict]:
+    results: list[dict] = []
+    for path in sorted((REPO_ROOT / "vulnerabilities").glob("*/evidence/validation.json")):
+        try:
+            data = json.loads(path.read_text())
+        except (json.JSONDecodeError, OSError):
+            continue
+        if isinstance(data, dict):
+            results.append(data)
+    return results
+
+
+def package_poc_relpath(cve: str) -> str | None:
+    path = REPO_ROOT / "vulnerabilities" / cve / "poc" / "exploit.py"
+    if path.is_file():
+        return str(path.relative_to(REPO_ROOT))
+    return None
+
+
+def format_metric(value, metric: str) -> str:
+    if value is None:
+        return "-"
+    if metric in ("attack_memory_delta", "control_memory_delta"):
+        return f"{float(value) / 1048576:.2f} MiB"
+    return f"{float(value):.2f}x"
 
 
 def load():
@@ -71,6 +110,9 @@ def track_label(t: str) -> str:
 
 
 def poc_relpath(cve: str) -> str | None:
+    package_path = package_poc_relpath(cve)
+    if package_path:
+        return package_path
     spec = PROBE_REGISTRY.get(cve)
     if spec is None:
         return None
@@ -214,51 +256,100 @@ def main():
         lines.append("")
 
     lines.append("## 5. PoC coverage and how to extend it\n")
-    implemented = sorted(PROBE_REGISTRY)
-    lines.append(
-        f"{len(implemented)} PoCs are registered in `probes/registry.py` and run by "
-        "`tests/regression/compare_versions.py` against the vulnerable and patched "
-        "targets in the same invocation:\n"
-    )
-    for cve in implemented:
-        spec = PROBE_REGISTRY[cve]
-        lines.append(
-            f"- `{cve}` -> `{poc_relpath(cve)}` "
-            f"(vulnerable `{spec.get('vulnerable_target', 'vulnerable')}` vs "
-            f"patched `{spec.get('patched_target', 'patched')}`)"
-        )
+    package_probes = load_package_probes()
+    package_validations = load_package_validations()
 
-    reg_results = load_regression_results()
-    if reg_results:
-        lines.append("\nLatest live A/B results "
-                     "(`evidence/metrics/regression-results.json`):\n")
-        lines.append("| CVE | Vulnerable target | Patched target | Vulnerable amp | Patched amp | Verdict |")
-        lines.append("|---|---|---|---|---|---|")
-        for r in reg_results:
+    if package_probes:
+        lines.append(
+            f"{len(package_probes)} package probes are implemented under "
+            "`vulnerabilities/*/poc/` and run by `vulnforge validate`. The legacy "
+            "`probes/registry.py` harness remains for historical comparison.\n"
+        )
+        for cve in sorted(package_probes):
+            spec = package_probes[cve]
+            targets = spec.get("targets", {})
             lines.append(
-                f"| `{r.get('cve')}` | `{r.get('vulnerable_target')}` | "
-                f"`{r.get('patched_target')}` | "
-                f"{r.get('vulnerable_amplification', 0):.2f}x | "
-                f"{r.get('patched_amplification', 0):.2f}x | "
-                f"**{r.get('verdict')}** |"
+                f"- `{cve}` -> `{poc_relpath(cve)}` "
+                f"(vulnerable `{targets.get('vulnerable', '?')}` vs patched "
+                f"`{targets.get('patched', '?')}`; metric `{spec.get('metric', '?')}`)"
+            )
+    else:
+        lines.append(
+            f"{len(PROBE_REGISTRY)} legacy probes are registered in "
+            "`probes/registry.py` and run by `tests/regression/compare_versions.py`.\n"
+        )
+        for cve in sorted(PROBE_REGISTRY):
+            spec = PROBE_REGISTRY[cve]
+            lines.append(
+                f"- `{cve}` -> `{poc_relpath(cve)}` "
+                f"(vulnerable `{spec.get('vulnerable_target', 'vulnerable')}` vs "
+                f"patched `{spec.get('patched_target', 'patched')}`)"
+            )
+
+    if package_validations:
+        lines.append(
+            "\nM3 multi-run results (`vulnerabilities/*/evidence/validation.json`):\n"
+        )
+        lines.append(
+            "| CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict |"
+        )
+        lines.append("|---|---|---|---|---|---|---|")
+        for result in package_validations:
+            targets = result.get("targets", {})
+            vuln = targets.get("vulnerable", {})
+            patched = targets.get("patched", {})
+            vuln_summary = vuln.get("summary", {})
+            patched_summary = patched.get("summary", {})
+            metric = result.get("aggregates", {}).get("metric", "unknown")
+            lines.append(
+                f"| `{result.get('cve')}` | `{vuln.get('version', '?')}` -> "
+                f"`{patched.get('version', '?')}` | `{metric}` | "
+                f"{format_metric(vuln_summary.get('median'), metric)} | "
+                f"{format_metric(patched_summary.get('median'), metric)} | "
+                f"{result.get('runs', '?')} | **{result.get('verdict')}** |"
             )
         lines.append(
-            "\nA non-`CONFIRMED` verdict is a real result, not a reporting gap: "
-            "`compare_versions.py` exits non-zero for `INCONCLUSIVE` and `FAIL` "
-            "because a probe that stops reproducing is as important as a patch "
-            "that does not hold."
+            "\nVerdicts are median-based with a patched-CV guard; run ranges must "
+            "not overlap in absolute mode. A non-`CONFIRMED` verdict is a real "
+            "result, not a reporting gap."
         )
-        lines.append(
-            "\nThese are single-run measurements from the pre-factory harness. "
-            "The VulnForge M3 validator will replace them with repeated runs, "
-            "medians, and a variance guard; treat any single run as provisional."
-        )
+        for result in package_validations:
+            if result.get("verdict") != "CONFIRMED":
+                lines.append(
+                    f"- `{result.get('cve')}`: {result.get('verdict')} -- "
+                    f"{result.get('reason', 'no reason recorded')}"
+                )
     else:
-        lines.append("\nNo live regression results are recorded yet; run "
-                     "`tests/regression/compare_versions.py --all --json-out "
-                     "evidence/metrics/regression-results.json`.")
+        reg_results = load_regression_results()
+        if reg_results:
+            lines.append(
+                "\nLegacy single-run results "
+                "(`evidence/metrics/regression-results.json`):\n"
+            )
+            lines.append(
+                "| CVE | Vulnerable target | Patched target | Vulnerable amp | Patched amp | Verdict |"
+            )
+            lines.append("|---|---|---|---|---|---|")
+            for r in reg_results:
+                lines.append(
+                    f"| `{r.get('cve')}` | `{r.get('vulnerable_target')}` | "
+                    f"`{r.get('patched_target')}` | "
+                    f"{r.get('vulnerable_amplification', 0):.2f}x | "
+                    f"{r.get('patched_amplification', 0):.2f}x | "
+                    f"**{r.get('verdict')}** |"
+                )
+            lines.append(
+                "\nThese are historical single-run measurements; M3 package "
+                "validation replaces them with medians and a variance guard."
+            )
+        else:
+            lines.append(
+                "\nNo validation results are recorded yet; run "
+                "`vulnforge validate <CVE> --runs 3`."
+            )
 
-    unimplemented = [r for r in matrix if r["cve"] not in PROBE_REGISTRY]
+    implemented_cves = set(package_probes) | set(PROBE_REGISTRY)
+    unimplemented = [r for r in matrix if r["cve"] not in implemented_cves]
     testable = [
         r for r in unimplemented
         if version_in_range(LAB_VULNERABLE_VERSION, advisories[r["cve"]])
@@ -271,8 +362,9 @@ def main():
         lines.append(
             f"The next-highest-priority item that is still vulnerable at the lab's "
             f"`{LAB_VULNERABLE_VERSION}` checkpoint is **{nxt['cve']}** "
-            f"({nxt['title']}). Add its probe module under `probes/`, register it in "
-            f"`probes/registry.py`, and re-run `tests/regression/compare_versions.py`."
+            f"({nxt['title']}). Add its package under `vulnerabilities/`, "
+            f"register the probe in `poc/manifest.json`, and re-run "
+            f"`vulnforge validate`."
         )
     else:
         lines.append(

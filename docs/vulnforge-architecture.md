@@ -1,6 +1,6 @@
 # VulnForge Architecture
 
-**Status:** M0/M1/M2 implemented. Bandit is the first adapter, not the product.
+**Status:** M0–M3 implemented. Bandit is the first adapter, not the product.
 
 VulnForge turns vulnerability intelligence into executable, testable research
 artifacts:
@@ -36,8 +36,8 @@ exploit scripts.
 | Source analyzer | Commit diffs, affected code paths, root-cause scaffold | Commits list only | M5 |
 | Image builder | Pinned vulnerable/patched images + provenance | M2: per-version locks, base-image digest, OCI labels, image IDs | M2 (done) |
 | Lab orchestrator | Build/start/stop/status, dynamic ports, isolation | M2: dynamic loopback ports, per-lab Compose project, runtime file | M2 (done) |
-| PoC engine | Load, scaffold, run package probes | 2 scripts + central registry | M3 |
-| Validator | A/B runs, repetitions, variance, verdicts | Single-run harness | M3 |
+| PoC engine | Load, scaffold, run package probes | M3: package-local probes + `ProbeResult` | M3 (done) |
+| Validator | A/B runs, repetitions, variance, verdicts | M3: medians, CV guard, hash-checked evidence | M3 (done) |
 | Detector | Behavioral rules against captured telemetry | Synthetic self-test | M4 |
 | Reporter | Per-CVE and global Markdown/JSON | Global report | M4 |
 
@@ -55,10 +55,10 @@ src/vulnforge/
   packages.py       # discovery, loading, cross-file checks
   __main__.py       # python -m vulnforge
   ingest/           # M5
-  triage/           # M2
-  lab/              # M2
-  poc/              # M3
-  validate/         # M3
+  triage/           # pending: version-plan extraction
+  lab/              # M2: orchestrator, docker backend, ports, provenance
+  probe/            # M3: ProbeResult, ProbeTarget, sampler, loader
+  validate/         # M3: multi-run stats, verdicts, evidence bundles
   detect/           # M4
   report/           # M4
   targets/
@@ -141,35 +141,45 @@ recorded.
 
 - Same app and configuration on both sides; only the target dependency version
   differs.
-- Vulnerable and patched runs in the same invocation.
+- The validator reads `.vulnforge/labs/<cve>/runtime.json`; no fixed host/port
+  assumptions in package probes.
 - Default 3 repetitions; record median, min, max, standard deviation, and
-  coefficient of variation.
-- Verdict from medians with a variance guard:
-  - `CONFIRMED`: vulnerable median >= minimum and patched median <= maximum,
-    with non-overlapping run ranges.
-  - `FAIL`: patched median above maximum.
-  - `INCONCLUSIVE`: vulnerable median too low, insufficient samples, or CV too
-    high.
-  - `ERROR`: infrastructure failure.
-- Optional A/A control (same vulnerable version both sides) to catch metric
-  bias.
-- Correct the 111101 pair to **1.13.1 vs 1.14.0** (first fixed), not 1.14.1.
-- Store raw per-run data, not only aggregates.
+  coefficient of variation per target.
+- Control-first probe ordering and a forced full-BEAM GC before each baseline
+  (`POST /gc`) keep residual memory from inflating the control.
+- Two verdict modes:
+  - **absolute**: vulnerable median >= minimum, patched median <= maximum,
+    patched CV <= guard, and non-overlapping run ranges.
+  - **relative**: vulnerable median >= sanity floor and
+    `vulnerable_median / patched_median >= min_ratio`.
+- `FAIL` when the patched side is still above the maximum (or sanity cap);
+  `INCONCLUSIVE` for insufficient samples, high patched CV, overlapping ranges,
+  or a relative reduction below the pre-registered threshold; `ERROR` for
+  probe/infrastructure failures.
+- Optional A/A control runs the vulnerable target twice per repetition and
+  records the ratios; it is diagnostic, not yet part of the verdict.
+- Corrected 111101 pair: **1.13.1 vs 1.14.0** (first fixed), not 1.14.1.
+- Store raw per-run data, telemetry, logs, image IDs, and hashes.
+
+Current results: 116078 `CONFIRMED` (8.03 MB vs 0.55 MB, 3 runs);
+111101 `INCONCLUSIVE` (1.60x relative reduction, below the 2.00x threshold).
 
 ## 6. Evidence bundle
 
 ```text
 evidence/
-  execution.json       # command, environment, versions, image digests, verdict
-  metrics.json         # raw samples + aggregates
-  telemetry/*.jsonl    # /admin/stats time series
-  logs/*.log
-  detection.json
-  manifest.json        # sha256 of every artifact
+  execution.json          # command, env, versions, image IDs, artifact hashes
+  validation.json         # verdict, per-run metrics, aggregates, reason
+  runs/run-NN-role.json   # raw probe result per run/role
+  telemetry/run-NN-role.json  # /admin/stats time series
+  logs/role.log           # container logs
+  detection.json          # M4
 ```
 
-Reports are generated from the bundle. Evidence is append-only for a given
-run; regenerate rather than hand-edit.
+`execution.json` lists every evidence artifact with a SHA-256 hash; README
+files are documentation and are excluded from the hash manifest. Reports are
+generated from the bundle. Evidence is append-only for a given run; regenerate
+rather than hand-edit.
 
 ## 7. Detection methodology
 
@@ -187,7 +197,7 @@ run; regenerate rather than hand-edit.
 | **M0** | Architecture, schemas, golden baselines, decisions | Schemas validate current artifacts; existing commands still work |
 | **M1** | Factory skeleton, package model, CLI, first package | `vulnforge package validate CVE-2026-116078` passes; old scripts work |
 | **M2** | Lab orchestrator, image provenance, dynamic ports, adapters | Build/start/status works; image digests recorded; no fixed global ports |
-| **M3** | Probe protocol, multi-run validation, evidence bundles | 116078 CONFIRMED over 3 runs; 111101 has a defensible verdict |
+| **M3** | Probe protocol, multi-run validation, evidence bundles | 116078 CONFIRMED over 3 runs; 111101 has a defensible verdict (both done) |
 | **M4** | Detection against telemetry, per-CVE/global reports | `detect` and `report` produce artifacts |
 | **M5** | OSV/Hex/GitHub ingestion, source analysis | Idempotent refresh with diff/apply; fixture tests offline |
 | **M6** | Second target adapter | Same CLI works for a non-Bandit target; core has no target imports |
@@ -211,6 +221,22 @@ Roughly 6–8 focused weeks to M4; M5–M7 add another 3–4 weeks.
   hashes, build args, OCI labels, image IDs, git revision, and runtime targets.
 - The lab adapter is resolved from `config/vulnforge.yaml` through
   `vulnforge.targets.loader`; the core does not import Bandit directly.
+
+### M3 implementation notes
+
+- Package probes implement `run(target, **kwargs) -> ProbeResult`; the loader
+  resolves `poc/manifest.json:entrypoint`.
+- Probes read the dynamic runtime, so no fixed host/port assumptions.
+- The lab admin listener exposes `POST /gc`; probes run the control first and
+  force GC before each baseline.
+- The validator supports absolute and relative predicates, 3+ runs, a
+  patched-CV guard, and non-overlapping-range checks in absolute mode.
+- Evidence bundles include raw runs, telemetry, logs, image IDs, and hashes;
+  the validator updates `package.json` status/verdict.
+- CVE-2026-116078: 100k frames, vulnerable median 8.03 MB vs patched 0.55 MB,
+  `CONFIRMED`.
+- CVE-2026-111101: corrected 1.13.1 vs 1.14.0 pair, stable 1.60x reduction,
+  below the pre-registered 2.00x threshold, `INCONCLUSIVE`.
 
 ## 9. Non-goals for the first slice
 
@@ -239,23 +265,25 @@ Roughly 6–8 focused weeks to M4; M5–M7 add another 3–4 weeks.
 
 ## 11. Known current gaps
 
-M2 addressed the earlier image/lab gaps: per-version `mix.lock` files are
-checked in under `lab/app/locks/`, the base image is pinned by digest, and labs
-use dynamic loopback ports with per-CVE Compose projects and container names.
+M2 addressed the image/lab gaps, and M3 addressed the single-run validator,
+package-probe bridge, and evidence-bundle gaps. Per-version lockfiles, digest
+pinning, dynamic ports, package-local probes, runtime integration, multi-run
+medians, telemetry, logs, and hash-checked evidence are all in place.
 
 Remaining:
 
-1. The validator still runs once per target; no repetitions/variance (M3).
-2. Evidence is one JSON, not a hashed bundle with telemetry/logs (M3).
-3. Detection is synthetic, not tied to captured telemetry (M4).
-4. No ingestion or commit-level source analysis (M5).
-5. Bandit-specific assumptions remain in repo-level scripts; the adapter
-   boundary is only partially extracted (M6).
-6. The package PoC is still a bridge to the repo probe and does not read
-   `.vulnforge/labs/<cve>/runtime.json` (M3).
-7. The static `lab/compose.yaml` fallback duplicates the generated Compose
+1. Detection is specified but not executed against captured telemetry (M4).
+2. No ingestion or commit-level source analysis (M5).
+3. Bandit-specific assumptions remain in the legacy `probes/` harness and
+   `tests/regression/`; the adapter boundary is only partially extracted (M6).
+4. The static `lab/compose.yaml` fallback duplicates the generated Compose
    intent; it can be removed once manual fallback is no longer needed.
-8. The committed M2 provenance was generated from a dirty worktree; rebuild
-   after the M2 commit if a clean `git.dirty: false` record is required.
+5. M3 evidence/provenance was generated from a dirty worktree. Rebuild and
+   revalidate after the M3 commits if a clean `git.dirty: false` record is
+   required; rerunning validation may change the 111101 verdict only within
+   its measurement noise.
+6. CVE-2026-111101 remains `INCONCLUSIVE`; the metric may not capture the
+   exact 1.14.0 fix. Commit-level review is pending.
+7. No second target adapter yet (M6).
 
-These are addressed in M3–M6.
+These are addressed in M4–M6.
