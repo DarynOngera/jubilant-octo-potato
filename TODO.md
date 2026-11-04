@@ -1,6 +1,6 @@
 # TODO — VulnForge
 
-Branch: `feat/prioritizer-data-driven`
+Branch: `docs/trim-readme`
 
 M0–M7 are implemented. This file tracks the completed work and the remaining
 future items.
@@ -66,7 +66,7 @@ future items.
 
 | CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict | Detection |
 |---|---|---|---:|---:|---|---|---|
-| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 5.03 MiB | 0.58 MiB | 3 | CONFIRMED | TRIGGERED |
+| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 7.73 MiB | 0.59 MiB | 3 | CONFIRMED | TRIGGERED |
 | CVE-2026-111101 | 1.13.1 -> 1.14.0 | attack memory | 2.66 MiB | 1.67 MiB | 3 | INCONCLUSIVE (1.60x < 2.00x) | INCONCLUSIVE |
 
 ## Future work

@@ -437,7 +437,7 @@ Multi-run results (`vulnerabilities/*/evidence/validation.json`):
 | CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict | Detection |
 |---|---|---|---|---|---|---|---|
 | `CVE-2026-111101` | `1.13.1` -> `1.14.0` | `attack_memory_delta` | 2.66 MiB | 1.67 MiB | 3 | **INCONCLUSIVE** | INCONCLUSIVE |
-| `CVE-2026-116078` | `1.14.0` -> `1.14.1` | `attack_memory_delta` | 5.03 MiB | 0.58 MiB | 3 | **CONFIRMED** | TRIGGERED |
+| `CVE-2026-116078` | `1.14.0` -> `1.14.1` | `attack_memory_delta` | 7.73 MiB | 0.59 MiB | 3 | **CONFIRMED** | TRIGGERED |
 
 Verdicts are median-based with a patched-CV guard; run ranges must not overlap in absolute mode. A non-`CONFIRMED` verdict is a real result, not a reporting gap.
 - `CVE-2026-111101`: INCONCLUSIVE -- relative reduction 1.60x is below the pre-registered 2.00x threshold

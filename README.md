@@ -10,12 +10,14 @@ CVSS.
 
 | CVE | Pair | Vulnerable median | Patched median | Verdict | Detection |
 |---|---|---:|---:|---|---|
-| CVE-2026-116078 | 1.14.0 → 1.14.1 | 5.03 MiB | 0.58 MiB | **CONFIRMED** | **TRIGGERED** |
+| CVE-2026-116078 | 1.14.0 → 1.14.1 | 7.73 MiB | 0.59 MiB | **CONFIRMED** | **TRIGGERED** |
 | CVE-2026-111101 | 1.13.1 → 1.14.0 | 2.66 MiB | 1.67 MiB | **INCONCLUSIVE** (1.60x < 2.00x) | INCONCLUSIVE |
 
 Medians are from 3 runs of the absolute attack-memory metric. 116078's run
-ranges do not overlap; 111101's corrected first-fixed pair does not meet the
-pre-registered 2.00x threshold and is not a confirmed finding.
+ranges do not overlap; its detection signal is the memory-per-connection
+outlier rule, which now requires both z > 3 and at least 3 MB. 111101's
+corrected first-fixed pair does not meet the pre-registered 2.00x threshold and
+is not a confirmed finding.
 
 - 24 advisories triaged and prioritized; 2 packaged end-to-end; 22 remaining.
 - VulnForge M0–M7 implemented. The second-target proof is a toy adapter; a real
