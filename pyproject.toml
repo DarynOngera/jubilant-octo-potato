@@ -1,0 +1,13 @@
+[project]
+name = "bandit-security-research"
+version = "0.1.0"
+description = "Triage, PoC, lab, and detection pipeline for Bandit (Elixir HTTP server) security advisories"
+requires-python = ">=3.10"
+dependencies = [
+    "packaging>=24.0",
+    "pyyaml>=6.0",
+    "h2>=4.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

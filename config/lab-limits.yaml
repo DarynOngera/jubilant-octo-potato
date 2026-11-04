@@ -1,0 +1,23 @@
+# Non-negotiable constraints for every lab experiment. probes/common.py
+# reads this file and refuses to run if a target or payload budget doesn't
+# match.
+isolation:
+  bind_interface: "127.0.0.1"       # never run probes against a non-loopback host
+  allowed_networks: ["labnet"]       # docker network name
+  deny_if_hostname_in: ["prod", "staging", "live"]  # refuse-on-sight substrings
+
+resource_ceilings:
+  # The lab image pins ERL_AFLAGS="+Q 262144". OTP 27 otherwise sizes the
+  # fixed port table from host RAM (~1.5 GiB reserved), which OOM-kills a
+  # 512 MiB container before the app starts and also hides PoC memory deltas
+  # inside the cap.
+  mem_limit_mb: 512
+  cpu_limit_cores: 1.0
+  pids_limit: 512
+
+experiment_bounds:
+  max_duration_seconds: 120          # hard stop per probe run
+  max_connections: 8
+  max_request_bytes_total: 268435456 # 256 MiB wire bytes sent, per probe run
+  require_patched_control: true      # every CVE test must also run against
+                                      # bandit-patched in the same invocation

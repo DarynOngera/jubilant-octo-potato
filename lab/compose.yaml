@@ -1,0 +1,101 @@
+# Bandit vulnerability research lab.
+#
+# Isolation rules enforced here (see config/lab-limits.yaml for the policy
+# this encodes):
+#   - bound to 127.0.0.1 only -- never exposed on a non-loopback interface
+#   - dedicated bridge network, no access to any other compose project
+#   - hard memory/CPU/pids caps per container so a successful amplification
+#     PoC crashes its own container, not the host
+#   - read-only root filesystem + no new privileges + all capabilities dropped
+#   - no restart policy: a crashed target stays crashed for forensics
+#     instead of silently respawning mid-experiment
+#
+# Usage:
+#   docker compose -f lab/compose.yaml build      # builds all three targets
+#   docker compose -f lab/compose.yaml up -d
+#   docker compose -f lab/compose.yaml down -v    # tear down + wipe volumes
+
+name: bandit-security-research
+
+networks:
+  labnet:
+    driver: bridge
+    # NOTE: this cannot be `internal: true`. On this Docker version an
+    # internal bridge yields no gateway and Docker does not create published
+    # port mappings for containers attached to it, so the loopback-bound
+    # 4100/4110/4120 ports are unreachable from the host. The network is
+    # still a dedicated project-scoped bridge, every port is bound to
+    # 127.0.0.1, and the lab app makes no outbound connections. If you need
+    # a hard runtime egress block, add an explicit iptables/firewall rule
+    # for the lab subnet rather than toggling `internal`.
+    internal: false
+
+x-target-defaults: &target_defaults
+  build:
+    context: ./app
+  networks: [labnet]
+  mem_limit: "512m"
+  mem_reservation: "128m"
+  cpus: "1.0"
+  pids_limit: 512
+  read_only: true
+  tmpfs:
+    - /tmp
+  security_opt:
+    - "no-new-privileges:true"
+  cap_drop: ["ALL"]
+  restart: "no"
+  environment:
+    MAX_BODY_LENGTH: "1000000"
+    READ_TIMEOUT_MS: "15000"
+    BANDIT_HTTP2: "true"
+    APP_PORT: "4000"
+    ADMIN_PORT: "4001"
+    # OTP 27 auto-sizes max_ports from host memory (~1.5 GiB port table on
+    # a large host). Pin it here as well as in the Dockerfile so the runtime
+    # VM baseline fits the 512 MiB cap and PoC memory deltas stay visible.
+    ERL_AFLAGS: "+Q 262144"
+
+services:
+  # Last version vulnerable to the October 26 2026 advisory batch
+  # (CVE-2026-111101, 108525, 108529, 110499, 109584, 111103, 115269, ...).
+  # Still vulnerable to CVE-2026-116078 as well (fixed only in 1.14.1).
+  bandit-vulnerable:
+    <<: *target_defaults
+    build:
+      context: ./app
+      args:
+        BANDIT_VERSION: "1.13.1"
+    container_name: bandit-vulnerable
+    ports:
+      - "127.0.0.1:4100:4000"   # app traffic (PoC target)
+      - "127.0.0.1:4101:4001"   # admin/stats
+
+  # First version with the October 26 batch fixed, but CVE-2026-116078
+  # still open -- useful for isolating that one DATA-frame-amplification
+  # fix from the rest of the batch.
+  bandit-interim:
+    <<: *target_defaults
+    build:
+      context: ./app
+      args:
+        BANDIT_VERSION: "1.14.0"
+    container_name: bandit-interim
+    # No profile: the regression harness uses this target as the vulnerable
+    # side of CVE-2026-116078 (fixed only in 1.14.1), so a normal
+    # `docker compose up -d` must start it.
+    ports:
+      - "127.0.0.1:4120:4000"
+      - "127.0.0.1:4121:4001"
+
+  # Fully patched as of this scaffold (latest release, 1.14.1).
+  bandit-patched:
+    <<: *target_defaults
+    build:
+      context: ./app
+      args:
+        BANDIT_VERSION: "1.14.1"
+    container_name: bandit-patched
+    ports:
+      - "127.0.0.1:4110:4000"
+      - "127.0.0.1:4111:4001"

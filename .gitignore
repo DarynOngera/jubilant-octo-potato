@@ -1,0 +1,9 @@
+evidence/raw/*
+evidence/metrics/*
+!evidence/raw/.gitkeep
+!evidence/metrics/.gitkeep
+_build/
+deps/
+*.beam
+__pycache__/
+*.pyc

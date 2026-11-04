@@ -1,0 +1,469 @@
+{
+  "source": "https://hex.pm/packages/bandit/advisories",
+  "retrieved": "2026-11-04",
+  "package": "bandit",
+  "latest_version": "1.14.1",
+  "advisories": [
+    {
+      "cve": "CVE-2026-116078",
+      "ghsa": "GHSA-pxjf-g536-7r93",
+      "osv": "EEF-CVE-2026-116078",
+      "title": "HTTP/2 request bodies made of 1-byte DATA frames amplify memory use in Bandit",
+      "published": "2026-10-28",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 0.3.1 and < 1.14.1",
+      "fixed_in": "1.14.1",
+      "track": "http2_resource_exhaustion",
+      "commits": [
+        "327bb02ff84171237e1aeff787930debd16155ee",
+        "c8dc1e97050cf359f61ed6cdd110f3cdaf1d6f5f"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-116078.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-pxjf-g536-7r93"
+      ]
+    },
+    {
+      "cve": "CVE-2026-108529",
+      "ghsa": "GHSA-j363-h72p-296m",
+      "osv": "EEF-CVE-2026-108529",
+      "title": "SETTINGS and stream-0 WINDOW_UPDATE frames trigger quadratic work over blocked streams in Bandit",
+      "published": "2026-10-26",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 0.3.4 and < 1.14.0",
+      "fixed_in": "1.14.0",
+      "track": "http2_resource_exhaustion",
+      "commits": [
+        "220b9dfd27f9a21305be2afc75cbe585ddc24e7a",
+        "6feadb31189d18b7dcda6c663112cd3bbaf63a46"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-108529.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-j363-h72p-296m"
+      ]
+    },
+    {
+      "cve": "CVE-2026-110499",
+      "ghsa": "GHSA-47x4-3fxf-82fr",
+      "osv": "EEF-CVE-2026-110499",
+      "title": "Client-chosen HPACK encoder table size is applied uncapped, growing per-connection state with every response in Bandit",
+      "published": "2026-10-26",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 0.3.6 and < 1.14.0",
+      "fixed_in": "1.14.0",
+      "track": "http2_resource_exhaustion",
+      "commits": [
+        "0e68313fab9d204257ebad5c447e4cd9cea8e0ea",
+        "220b9dfd27f9a21305be2afc75cbe585ddc24e7a"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-110499.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-47x4-3fxf-82fr"
+      ]
+    },
+    {
+      "cve": "CVE-2026-109584",
+      "ghsa": "GHSA-7gfj-7gvq-3xqj",
+      "osv": "EEF-CVE-2026-109584",
+      "title": "HTTP/2 cookie crumb join expands a small HPACK header block into an unbounded allocation in Bandit",
+      "published": "2026-10-26",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 0.3.3 and < 1.14.0",
+      "fixed_in": "1.14.0",
+      "track": "http2_resource_exhaustion",
+      "commits": [
+        "220b9dfd27f9a21305be2afc75cbe585ddc24e7a",
+        "44bf969cd59851622fb6ee4d16227fbc39a77fb4"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-109584.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-7gfj-7gvq-3xqj"
+      ]
+    },
+    {
+      "cve": "CVE-2026-111103",
+      "ghsa": "GHSA-2238-pgfc-w82m",
+      "osv": "EEF-CVE-2026-111103",
+      "title": "HTTP/2 StreamError recovery rolls back connection state and bypasses per-connection limits in Bandit",
+      "published": "2026-10-26",
+      "cvss_score": 8.2,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 1.9.0 and < 1.14.0",
+      "fixed_in": "1.14.0",
+      "track": "http2_resource_exhaustion",
+      "commits": [
+        "220b9dfd27f9a21305be2afc75cbe585ddc24e7a",
+        "3ad49c80c268891e7cc412e69649115456638e59"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-111103.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-2238-pgfc-w82m"
+      ]
+    },
+    {
+      "cve": "CVE-2026-111101",
+      "ghsa": "GHSA-jwh3-j29h-qfmw",
+      "osv": "EEF-CVE-2026-111101",
+      "title": "HTTP/1.1 chunked request bodies made of 1-byte chunks amplify memory use in Bandit",
+      "published": "2026-10-26",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 0.1.0 and < 1.14.0",
+      "fixed_in": "1.14.0",
+      "track": "http1_resource_exhaustion",
+      "commits": [
+        "220b9dfd27f9a21305be2afc75cbe585ddc24e7a",
+        "7201270c34b90f6c9e15c0386c2bb802c0c72ab4"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-111101.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-jwh3-j29h-qfmw"
+      ]
+    },
+    {
+      "cve": "CVE-2026-113436",
+      "ghsa": "GHSA-29cr-8477-rg6r",
+      "osv": "EEF-CVE-2026-113436",
+      "title": "Quadratic bignum parsing of Content-Length and Host port values in Bandit",
+      "published": "2026-10-26",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 1.0.0-pre.7 and < 1.14.0",
+      "fixed_in": "1.14.0",
+      "track": "http1_resource_exhaustion",
+      "commits": [
+        "220b9dfd27f9a21305be2afc75cbe585ddc24e7a",
+        "e0c8c0c30af9b0f57d8aafac37ddd9294363a8be"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-113436.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-29cr-8477-rg6r"
+      ]
+    },
+    {
+      "cve": "CVE-2026-110314",
+      "ghsa": "GHSA-2v5v-8f9v-xh85",
+      "osv": "EEF-CVE-2026-110314",
+      "title": "WebSocket frames keep reaching the WebSock after a server-initiated close in Bandit",
+      "published": "2026-10-26",
+      "cvss_score": 6.3,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N",
+      "affected": ">= 0.5.1 and < 1.14.0",
+      "fixed_in": "1.14.0",
+      "track": "websocket_state_correctness",
+      "commits": [
+        "220b9dfd27f9a21305be2afc75cbe585ddc24e7a",
+        "bb407f2277dcb65a58dd8cc07913a0b58a80e266"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-110314.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-2v5v-8f9v-xh85"
+      ]
+    },
+    {
+      "cve": "CVE-2026-114213",
+      "ghsa": "GHSA-cpx7-qf6w-jc63",
+      "osv": "EEF-CVE-2026-114213",
+      "title": "WebSocket 1-byte continuation frames bypass max_fragmented_message_size in Bandit",
+      "published": "2026-10-26",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 1.11.0 and < 1.14.0",
+      "fixed_in": "1.14.0",
+      "track": "websocket_exhaustion",
+      "commits": [
+        "21612c7c7b1ce43eccd36d3af3a2299d23513667",
+        "220b9dfd27f9a21305be2afc75cbe585ddc24e7a"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-114213.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-cpx7-qf6w-jc63"
+      ]
+    },
+    {
+      "cve": "CVE-2026-114216",
+      "ghsa": "GHSA-w5wc-g2hc-g7m2",
+      "osv": "EEF-CVE-2026-114216",
+      "title": "Chunk extensions accept bare LF and CR, enabling request smuggling in Bandit",
+      "published": "2026-10-26",
+      "cvss_score": 6.3,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:N/VI:L/VA:N/SC:L/SI:L/SA:N",
+      "affected": ">= 1.12.4 and < 1.14.0",
+      "fixed_in": "1.14.0",
+      "track": "http_request_smuggling",
+      "commits": [
+        "220b9dfd27f9a21305be2afc75cbe585ddc24e7a",
+        "c31e9e3c76dcbfc239a96eabed5341ced7885ae5"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-114216.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-w5wc-g2hc-g7m2"
+      ]
+    },
+    {
+      "cve": "CVE-2026-115269",
+      "ghsa": "GHSA-p2qv-vx88-385x",
+      "osv": "EEF-CVE-2026-115269",
+      "title": "HTTP/2 WINDOW_UPDATE and SETTINGS frames reset the request body read timeout in Bandit",
+      "published": "2026-10-26",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 1.4.0 and < 1.14.0",
+      "fixed_in": "1.14.0",
+      "track": "http2_resource_exhaustion",
+      "commits": [
+        "220b9dfd27f9a21305be2afc75cbe585ddc24e7a",
+        "fff06efe3be962b484bd4d3eb339372fda5a231f"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-115269.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-p2qv-vx88-385x"
+      ]
+    },
+    {
+      "cve": "CVE-2026-108525",
+      "ghsa": "GHSA-c3g7-2pg5-qvwh",
+      "osv": "EEF-CVE-2026-108525",
+      "title": "HTTP/2 inbound flow control is not enforced, letting a client queue unbounded DATA in stream processes in Bandit",
+      "published": "2026-10-26",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 0.3.1 and < 1.14.0",
+      "fixed_in": "1.14.0",
+      "track": "http2_resource_exhaustion",
+      "commits": [
+        "220b9dfd27f9a21305be2afc75cbe585ddc24e7a",
+        "c8dc1e97050cf359f61ed6cdd110f3cdaf1d6f5f"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-108525.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-c3g7-2pg5-qvwh"
+      ]
+    },
+    {
+      "cve": "CVE-2026-105660",
+      "ghsa": "GHSA-v53v-9hvg-37jf",
+      "osv": "EEF-CVE-2026-105660",
+      "title": "Unvalidated HTTP/1 request-target authority lets a client choose conn.host and conn.port in Bandit",
+      "published": "2026-10-15",
+      "cvss_score": 6.9,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:L/VA:N/SC:N/SI:N/SA:N",
+      "affected": ">= 0.6.0 and < 1.13.0",
+      "fixed_in": "1.13.0",
+      "track": "request_metadata_validation",
+      "commits": [
+        "0e3edda0edf6322e9164b827c6d3ddecd080ff2e",
+        "6ea80210137b3f69caf65f67398934259dc365d0"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-105660.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-v53v-9hvg-37jf"
+      ]
+    },
+    {
+      "cve": "CVE-2026-105659",
+      "ghsa": "GHSA-69m6-wcv4-rwcf",
+      "osv": "EEF-CVE-2026-105659",
+      "title": "HTTP/2 blocked-send deadlines reset on every WINDOW_UPDATE, letting a trickle pin stream processes indefinitely in Bandit",
+      "published": "2026-10-14",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 1.4.0 and < 1.13.0",
+      "fixed_in": "1.13.0",
+      "track": "http2_resource_exhaustion",
+      "commits": [
+        "d88b21953c65061f21136ea76a89a4f95a2ac7a1",
+        "fff06efe3be962b484bd4d3eb339372fda5a231f"
+      ],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-105659.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-69m6-wcv4-rwcf"
+      ]
+    },
+    {
+      "cve": "CVE-2026-75484",
+      "ghsa": "GHSA-x3gh-xhj4-3vq8",
+      "osv": "EEF-CVE-2026-75484",
+      "title": "HTTP/2 header field values containing CR, LF or NUL are passed to the application unvalidated in Bandit",
+      "published": "2026-08-20",
+      "cvss_score": 6.9,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:L/VA:N/SC:N/SI:N/SA:N",
+      "affected": ">= 1.4.0 and < 1.12.5",
+      "fixed_in": "1.12.5",
+      "track": "request_metadata_validation",
+      "commits": ["d38cf046c9a3cae4d0f88001c2ceb4143f86366b"],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-75484.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-x3gh-xhj4-3vq8"
+      ]
+    },
+    {
+      "cve": "CVE-2026-74836",
+      "ghsa": "GHSA-xj8g-532w-jv94",
+      "osv": "EEF-CVE-2026-74836",
+      "title": "HTTP/2 connection-window starvation pins Plug processes indefinitely in Bandit",
+      "published": "2026-08-20",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 0.3.4 and < 1.12.5",
+      "fixed_in": "1.12.5",
+      "track": "http2_resource_exhaustion",
+      "commits": ["f6914aad14bb1365dd6f306aa592cfb0819bed3e"],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-74836.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-xj8g-532w-jv94"
+      ]
+    },
+    {
+      "cve": "CVE-2026-65623",
+      "ghsa": "GHSA-vg8x-66vg-5pxh",
+      "osv": "EEF-CVE-2026-65623",
+      "title": "Quadratic CPU blow-up reassembling fragmented WebSocket messages in Bandit",
+      "published": "2026-07-24",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 1.11.0 and < 1.12.1",
+      "fixed_in": "1.12.1",
+      "track": "websocket_exhaustion",
+      "commits": ["418ef7e906192a230ddba112f7a669c87b6b0e3a"],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-65623.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-vg8x-66vg-5pxh"
+      ]
+    },
+    {
+      "cve": "CVE-2026-39806",
+      "ghsa": "GHSA-rf5q-vwxw-gmrf",
+      "osv": "EEF-CVE-2026-39806",
+      "title": "HTTP/1 chunked decoder infinite loop on requests with trailer fields in Bandit",
+      "published": "2026-05-13",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 1.6.0 and < 1.11.1",
+      "affected_ranges": [">= 1.6.1 and < 1.11.1", ">= 1.6.0 and < 1.11.1"],
+      "fixed_in": "1.11.1",
+      "track": "http1_resource_exhaustion",
+      "commits": ["ae3520dfdbfab115c638f8c7f6f6b805db34e1ab"],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-39806.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-rf5q-vwxw-gmrf",
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-39806"
+      ]
+    },
+    {
+      "cve": "CVE-2026-39803",
+      "ghsa": "GHSA-9q9q-324x-93r2",
+      "osv": "EEF-CVE-2026-39803",
+      "title": "HTTP/1 chunked body reader ignores length cap in Bandit",
+      "published": "2026-05-13",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 1.4.0 and < 1.11.1",
+      "fixed_in": "1.11.1",
+      "track": "http1_resource_exhaustion",
+      "commits": ["ae3520dfdbfab115c638f8c7f6f6b805db34e1ab"],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-39803.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-9q9q-324x-93r2",
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-39803"
+      ]
+    },
+    {
+      "cve": "CVE-2026-42788",
+      "ghsa": "GHSA-q6v9-r226-v65f",
+      "osv": "EEF-CVE-2026-42788",
+      "title": "HTTP/2 frame size limit checked after body is buffered in Bandit",
+      "published": "2026-05-01",
+      "cvss_score": 6.9,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:L/SC:N/SI:N/SA:N",
+      "affected": ">= 0.3.5 and < 1.11.0",
+      "affected_ranges": [">= 0.3.6 and < 1.11.0", ">= 0.3.5 and < 1.11.0"],
+      "fixed_in": "1.11.0",
+      "track": "http2_resource_exhaustion",
+      "commits": ["1e8e55966da9129016b73d32f0e1df4630e3b463"],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-42788.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-q6v9-r226-v65f",
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-42788"
+      ]
+    },
+    {
+      "cve": "CVE-2026-39807",
+      "ghsa": "GHSA-375f-4r2h-f99j",
+      "osv": "EEF-CVE-2026-39807",
+      "title": "Client-supplied URI scheme trusted without transport verification in Bandit",
+      "published": "2026-05-01",
+      "cvss_score": 6.3,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N",
+      "affected": ">= 1.0.0 and < 1.11.0",
+      "fixed_in": "1.11.0",
+      "track": "request_metadata_validation",
+      "commits": ["45feea20dea8af7ffd7245271107b695c040e667"],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-39807.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-375f-4r2h-f99j",
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-39807"
+      ]
+    },
+    {
+      "cve": "CVE-2026-39805",
+      "ghsa": "GHSA-c67r-gc9j-2qf7",
+      "osv": "EEF-CVE-2026-39805",
+      "title": "CL.CL HTTP request smuggling via duplicate Content-Length in Bandit",
+      "published": "2026-05-01",
+      "cvss_score": 6.3,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:L/VI:L/VA:N/SC:N/SI:N/SA:N",
+      "affected": "< 1.11.0",
+      "affected_ranges": [">= 0.1.0 and < 1.11.0", "< 1.11.0"],
+      "fixed_in": "1.11.0",
+      "track": "http_request_smuggling",
+      "commits": ["f2ca636eb6df385219957e8934e9fc6efa1630d1"],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-39805.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-c67r-gc9j-2qf7",
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-39805"
+      ]
+    },
+    {
+      "cve": "CVE-2026-42786",
+      "ghsa": "GHSA-pf94-94m9-536p",
+      "osv": "EEF-CVE-2026-42786",
+      "title": "WebSocket fragmented message reassembly unbounded in Bandit",
+      "published": "2026-05-01",
+      "cvss_score": 8.7,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 0.5.0 and < 1.11.0",
+      "fixed_in": "1.11.0",
+      "track": "websocket_exhaustion",
+      "commits": ["21612c7c7b1ce43eccd36d3af3a2299d23513667"],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-42786.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-pf94-94m9-536p",
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-42786"
+      ]
+    },
+    {
+      "cve": "CVE-2026-39804",
+      "ghsa": "GHSA-frh3-6pv6-rc8j",
+      "osv": "EEF-CVE-2026-39804",
+      "title": "WebSocket permessage-deflate inflate has no output-size cap in Bandit",
+      "published": "2026-05-01",
+      "cvss_score": 8.2,
+      "cvss_vector": "CVSS:4.0/AV:N/AC:L/AT:P/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N",
+      "affected": ">= 0.5.8 and < 1.11.0",
+      "affected_ranges": [">= 0.5.9 and < 1.11.0", ">= 0.5.8 and < 1.11.0"],
+      "fixed_in": "1.11.0",
+      "track": "websocket_exhaustion",
+      "commits": ["8156921a51e684a951221da7bc30a70a022f722e"],
+      "references": [
+        "https://cna.erlef.org/cves/CVE-2026-39804.html",
+        "https://github.com/mtrudel/bandit/security/advisories/GHSA-frh3-6pv6-rc8j",
+        "https://nvd.nist.gov/vuln/detail/CVE-2026-39804"
+      ]
+    }
+  ]
+}

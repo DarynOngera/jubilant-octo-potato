@@ -1,0 +1,25 @@
+# Top-level research configuration consumed by the CLI (see README).
+package: bandit
+hex_advisories_url: "https://hex.pm/packages/bandit/advisories"
+osv_ecosystem: "Hex"
+github_repo: "mtrudel/bandit"
+
+targets:
+  vulnerable:
+    base_url: "http://127.0.0.1:4100"
+    admin_url: "http://127.0.0.1:4101"
+    bandit_version: "1.13.1"
+  interim:
+    base_url: "http://127.0.0.1:4120"
+    admin_url: "http://127.0.0.1:4121"
+    bandit_version: "1.14.0"
+  patched:
+    base_url: "http://127.0.0.1:4110"
+    admin_url: "http://127.0.0.1:4111"
+    bandit_version: "1.14.1"
+
+priority_weights:
+  impact: 0.40
+  exploitability: 0.35
+  reachability: 0.15
+  detectability: 0.10
