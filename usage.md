@@ -72,6 +72,7 @@ multi-run workflow.
 | `src/vulnforge/validate/` | Multi-run statistics, verdict logic, evidence bundling |
 | `src/vulnforge/detect/` | Behavioral rules and offline detection runner |
 | `src/vulnforge/report/` | Per-CVE report generator; global report wrapper |
+| `src/vulnforge/ui/` | Local stdlib dashboard server, read model, action jobs, static assets |
 | `src/vulnforge/ingest/` | OSV ingestion, proposal/merge, commit analysis |
 | `src/vulnforge/triage/` | Resolver/prioritizer wrapper and package overlay |
 | `src/vulnforge/doctor.py` | Environment checks and runtime cleanup |
@@ -162,6 +163,42 @@ vulnforge clean
 
 There are no unimplemented CLI stubs left. See the docs index in `README.md`
 for authoring/ingestion/verdict/CI details.
+
+## Local UI (M8)
+
+`vulnforge ui` serves a local dashboard over the same artifacts the CLI writes.
+It binds to loopback only (`127.0.0.1` or `localhost`) and chooses a free port by
+default.
+
+```bash
+vulnforge ui                 # open a browser on a free loopback port
+vulnforge ui --port 8080     # fixed port
+vulnforge ui --no-open       # server only
+vulnforge ui --read-only     # disable action buttons and POSTs
+```
+
+Pages:
+
+- **Overview** — package status, verdict/detection badges, priority top-N,
+  provenance state.
+- **CVE detail** — advisory, validation medians/ranges, detection rules and
+  thresholds, evidence hashes and image provenance, rendered `report.md`, and
+  downloadable `.md`/`.json` reports.
+- **Labs** — live runtime status, service URLs, and Build/Start/Stop actions.
+- **Priority matrix** — the 24-advisory matrix with package links.
+- **Activity** — queued/running/completed jobs with streamed CLI logs.
+- **Health** — the same checks as `vulnforge doctor`.
+
+Actions are restricted to an allowlist: `lab build|start|stop`, `validate`,
+`poc run`, `detect`, `report`, `package validate`, and `triage --check`. Jobs run
+one at a time through the installed `vulnforge` CLI, never through a shell. The
+server rejects non-loopback `Host` headers and cross-origin POSTs, requires a
+per-process CSRF token, and never interpolates browser input into file paths.
+Mutating actions rewrite the same tracked evidence as their CLI equivalents, so
+the confirmation dialog lists what will change.
+
+The Markdown renderer (`marked` + `DOMPurify`) is vendored under
+`src/vulnforge/ui/static/vendor/`; the UI makes no CDN or network requests.
 
 ### Package layout
 
@@ -278,7 +315,7 @@ Typical full regeneration:
 ## 2. Tests and detection self-test
 
 ```bash
-# All Python unit tests (103 currently; 2 Docker integration tests skipped by default)
+# All Python unit tests (120 currently; 2 Docker integration tests skipped by default)
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 
 # Lint
@@ -459,11 +496,12 @@ and `ERROR` exit `1`.
 
 | CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict | Detection |
 |---|---|---|---|---:|---:|---|---|
-| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 5.03 MiB | 0.58 MiB | 3 | **CONFIRMED** | **TRIGGERED** |
+| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 7.79 MiB | 0.63 MiB | 3 | **CONFIRMED** | **TRIGGERED** |
 | CVE-2026-111101 | 1.13.1 -> 1.14.0 | attack memory | 2.66 MiB | 1.67 MiB | 3 | **INCONCLUSIVE** | **INCONCLUSIVE** |
 
 CVE-2026-116078: run ranges do not overlap; the memory-outlier rule
-discriminates vulnerable from patched (z 26–45 vs 2.5–2.8).
+discriminates vulnerable from patched (z 31.6–48.4 vs 3.3–4.3, with the
+patched runs floor-blocked below 3 MB).
 
 CVE-2026-111101: the corrected first-fixed pair shows a stable **1.60x**
 reduction, below the pre-registered 2.00x threshold. Detection also fires on

@@ -558,6 +558,47 @@ def _cmd_clean(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> in
     return 0
 
 
+def _cmd_ui(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
+    from .ui.server import create_server
+
+    if args.host not in {"127.0.0.1", "localhost", "::1"}:
+        print(
+            "error: the UI only binds to loopback addresses "
+            "(127.0.0.1, localhost, or ::1)",
+            file=sys.stderr,
+        )
+        return 2
+    try:
+        server = create_server(
+            cfg,
+            paths,
+            host=args.host,
+            port=args.port,
+            read_only=args.read_only,
+        )
+    except OSError as exc:
+        print(f"error: could not start UI: {exc}", file=sys.stderr)
+        return 1
+
+    host, port = server.server_address[:2]
+    display_host = f"[{host}]" if ":" in str(host) else str(host)
+    url = f"http://{display_host}:{port}/"
+    print(f"VulnForge UI: {url}")
+    print("Press Ctrl-C to stop.")
+    if not args.no_open:
+        import threading
+        import webbrowser
+
+        threading.Timer(0.4, lambda: webbrowser.open(url)).start()
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nStopped.")
+    finally:
+        server.server_close()
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="vulnforge",
@@ -708,6 +749,21 @@ def build_parser() -> argparse.ArgumentParser:
     clean.add_argument("--dry-run", action="store_true", help="show what would be removed")
     clean.add_argument("--json", action="store_true", help="emit JSON")
     clean.set_defaults(func=_cmd_clean)
+
+    ui = subparsers.add_parser(
+        "ui", help="serve the local read/write dashboard on loopback"
+    )
+    ui.add_argument(
+        "--host", default="127.0.0.1", help="loopback host (default 127.0.0.1)"
+    )
+    ui.add_argument(
+        "--port", type=int, default=0, help="port (default: choose a free port)"
+    )
+    ui.add_argument("--no-open", action="store_true", help="do not open a browser")
+    ui.add_argument(
+        "--read-only", action="store_true", help="disable action buttons and POSTs"
+    )
+    ui.set_defaults(func=_cmd_ui)
 
     return parser
 

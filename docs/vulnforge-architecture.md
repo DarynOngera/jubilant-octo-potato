@@ -1,6 +1,6 @@
 # VulnForge Architecture
 
-**Status:** M0–M7 implemented. M6's adapter proof uses the toy target; a real
+**Status:** M0–M8 implemented. M6's adapter proof uses the toy target; a real
 second production target remains future work.
 
 VulnForge turns vulnerability intelligence into executable, testable research
@@ -206,9 +206,10 @@ rather than hand-edit.
 | **M5** | OSV/Hex/GitHub ingestion, source analysis | Dry-run/apply, offline fixtures, commit scaffold, triage (done; full catalog flip deferred) |
 | **M6** | Second target adapter | Toy target + generalized contract (done); real second target future |
 | **M7** | CI, hardening, docs, optional OCI/local registry | CI, doctor, clean, docs, ruff (done); OCI/SBOM optional |
+| **M8** | Local dashboard: evidence views plus allowlisted actions | `vulnforge ui` serves overview/CVE/labs on loopback; jobs stream CLI logs |
 
 **First vertical slice:** M0–M3 for CVE-2026-116078 and CVE-2026-111101.
-M4–M7 are implemented in this branch as described below.
+M4–M8 are implemented in this branch as described below.
 
 ### M2 implementation notes
 
@@ -294,13 +295,32 @@ M4–M7 are implemented in this branch as described below.
 - Authoring, ingestion, verdict, and CI docs are under `docs/`.
 - Optional OCI registry/SBOM/signing remains deferred.
 
+### M8 implementation notes
+
+- `vulnforge ui` runs a stdlib `ThreadingHTTPServer` on a loopback address. It
+  adds no Python dependencies and no frontend build step.
+- The read model (`vulnforge.ui.readmodel`) normalizes package manifests,
+  validation, detection, provenance, evidence hashes, the priority matrix, and
+  lab runtime state. GET requests never write tracked files.
+- The static SPA renders overview, CVE detail, labs, matrix, activity, and health
+  views. Reports are rendered with vendored `marked` + `DOMPurify` and remain
+  downloadable as `.md`/`.json`.
+- Actions are an allowlist in `vulnforge.ui.jobs`: lab build/start/stop,
+  validate, PoC run, detect, report, package validate, and triage check. A
+  single worker queues jobs and executes the installed `vulnforge` CLI with
+  argv lists, never a shell.
+- The server rejects non-loopback `Host` headers and cross-origin POSTs,
+  requires a per-process CSRF token, validates CVEs against discovered packages,
+  and serves only files under the UI static directory.
+
 ## 9. Non-goals for the first slice
 
 - Autonomous exploit generation.
 - PostgreSQL or any database.
 - OCI registry; local images + digest metadata first.
 - Prometheus; `/admin/stats` JSON first.
-- Distributed workers, queues, or a web UI.
+- Distributed workers, queues, or a remote/multi-user web UI. The loopback-only
+  local dashboard (`vulnforge ui`) is supported.
 - Migrating all 24 advisories into packages at once.
 - Multi-target support before the Bandit slice is solid.
 
@@ -312,6 +332,7 @@ M4–M7 are implemented in this branch as described below.
 | Prioritization | `data/prioritization.json` scores; weights/tiers in `config/research.yaml`; matrix drift-checked |
 | Package directory | `vulnerabilities/` |
 | CLI | stdlib `argparse` |
+| UI | stdlib loopback server + vanilla JS; no Python or frontend dependencies |
 | Tests | stdlib `unittest` now; pytest optional for new tests |
 | Data validation | JSON Schema + `jsonschema` |
 | Lab backend | subprocess `docker compose` behind a backend interface |
