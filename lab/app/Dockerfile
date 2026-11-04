@@ -4,7 +4,7 @@
 # This guarantees the vulnerable and patched containers are byte-for-byte
 # identical apart from the pinned Bandit dependency, which is the whole
 # point of an A/B lab experiment.
-FROM hexpm/elixir:1.17.3-erlang-27.1.2-debian-bookworm-20241202-slim AS build
+FROM hexpm/elixir:1.17.3-erlang-27.1.2-debian-bookworm-20241202-slim@sha256:318497672d700b95c95a3195549e30c8451ab7e6eb5f462415653b94ab1032b6 AS build
 
 ARG BANDIT_VERSION=1.14.1
 ENV BANDIT_VERSION=${BANDIT_VERSION}
@@ -26,13 +26,18 @@ RUN mix local.hex --force && mix local.rebar --force
 WORKDIR /app
 COPY mix.exs mix.exs
 COPY config config
+# Per-version lockfiles keep `mix deps.get` deterministic across the three
+# pinned Bandit releases. The lockfile is selected by the same build arg that
+# pins Bandit in mix.exs.
+COPY locks locks
+RUN cp "locks/mix-${BANDIT_VERSION}.lock" mix.lock
 RUN mix deps.get --only prod
 RUN mix deps.compile
 
 COPY lib lib
 RUN mix compile
 
-FROM hexpm/elixir:1.17.3-erlang-27.1.2-debian-bookworm-20241202-slim AS runtime
+FROM hexpm/elixir:1.17.3-erlang-27.1.2-debian-bookworm-20241202-slim@sha256:318497672d700b95c95a3195549e30c8451ab7e6eb5f462415653b94ab1032b6 AS runtime
 
 ARG BANDIT_VERSION=1.14.1
 ENV BANDIT_VERSION=${BANDIT_VERSION}

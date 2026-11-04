@@ -1,6 +1,6 @@
 # VulnForge Architecture
 
-**Status:** M0/M1 design. Bandit is the first adapter, not the product.
+**Status:** M0/M1/M2 implemented. Bandit is the first adapter, not the product.
 
 VulnForge turns vulnerability intelligence into executable, testable research
 artifacts:
@@ -34,8 +34,8 @@ exploit scripts.
 | Intelligence | Fetch/normalize CVE, GHSA, OSV, commits | Manual catalog | M5 |
 | Version resolver | Affected/fixed ranges, version plans | Working multi-range resolver | M2 |
 | Source analyzer | Commit diffs, affected code paths, root-cause scaffold | Commits list only | M5 |
-| Image builder | Pinned vulnerable/patched images + provenance | One parameterized Bandit app | M2 |
-| Lab orchestrator | Build/start/stop/status, dynamic ports, isolation | Manual Compose | M2 |
+| Image builder | Pinned vulnerable/patched images + provenance | M2: per-version locks, base-image digest, OCI labels, image IDs | M2 (done) |
+| Lab orchestrator | Build/start/stop/status, dynamic ports, isolation | M2: dynamic loopback ports, per-lab Compose project, runtime file | M2 (done) |
 | PoC engine | Load, scaffold, run package probes | 2 scripts + central registry | M3 |
 | Validator | A/B runs, repetitions, variance, verdicts | Single-run harness | M3 |
 | Detector | Behavioral rules against captured telemetry | Synthetic self-test | M4 |
@@ -196,6 +196,22 @@ run; regenerate rather than hand-edit.
 **First vertical slice:** M0–M3 for CVE-2026-116078 and CVE-2026-111101.
 Roughly 6–8 focused weeks to M4; M5–M7 add another 3–4 weeks.
 
+### M2 implementation notes
+
+- `vulnforge lab build/start/stop/status` is implemented for Bandit.
+- The orchestrator allocates free loopback ports, writes a generated Compose
+  file under `.vulnforge/labs/<cve>/`, and stores runtime URLs in
+  `.vulnforge/labs/<cve>/runtime.json`.
+- Compose project, network, containers, and image tags are namespaced per CVE,
+  so multiple packages can run without fixed global ports.
+- `lab/app/locks/mix-<version>.lock` pins the dependency graph per Bandit
+  release; the Dockerfile selects the lock by `BANDIT_VERSION`.
+- The base image is pinned by digest in both Dockerfile stages.
+- `lab/provenance.json` records the Dockerfile hash, base image, lockfile
+  hashes, build args, OCI labels, image IDs, git revision, and runtime targets.
+- The lab adapter is resolved from `config/vulnforge.yaml` through
+  `vulnforge.targets.loader`; the core does not import Bandit directly.
+
 ## 9. Non-goals for the first slice
 
 - Autonomous exploit generation.
@@ -223,15 +239,23 @@ Roughly 6–8 focused weeks to M4; M5–M7 add another 3–4 weeks.
 
 ## 11. Known current gaps
 
-1. `lab/app/mix.lock` is generated inside the image, not checked in.
-2. The base image is pinned by tag, not digest.
-3. Fixed ports, container names, and network names prevent parallel labs.
-4. The validator runs once per target; no repetitions/variance.
-5. Evidence is one JSON, not a hashed bundle.
-6. Detection is synthetic, not tied to captured telemetry.
-7. No ingestion or commit-level source analysis.
-8. Bandit-specific assumptions are still in repo-level scripts.
-9. The project needs a dedicated git history for package provenance (branch
-   `feat/vulnforge-m0-m1` starts this).
+M2 addressed the earlier image/lab gaps: per-version `mix.lock` files are
+checked in under `lab/app/locks/`, the base image is pinned by digest, and labs
+use dynamic loopback ports with per-CVE Compose projects and container names.
 
-These are addressed in M2–M5.
+Remaining:
+
+1. The validator still runs once per target; no repetitions/variance (M3).
+2. Evidence is one JSON, not a hashed bundle with telemetry/logs (M3).
+3. Detection is synthetic, not tied to captured telemetry (M4).
+4. No ingestion or commit-level source analysis (M5).
+5. Bandit-specific assumptions remain in repo-level scripts; the adapter
+   boundary is only partially extracted (M6).
+6. The package PoC is still a bridge to the repo probe and does not read
+   `.vulnforge/labs/<cve>/runtime.json` (M3).
+7. The static `lab/compose.yaml` fallback duplicates the generated Compose
+   intent; it can be removed once manual fallback is no longer needed.
+8. The committed M2 provenance was generated from a dirty worktree; rebuild
+   after the M2 commit if a clean `git.dirty: false` record is required.
+
+These are addressed in M3–M6.

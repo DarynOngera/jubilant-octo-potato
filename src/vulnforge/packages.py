@@ -136,6 +136,12 @@ def load_package(package_root: Path, schemas_dir: Path) -> Package:
                 "evidence",
                 "evidence/execution.json",
             ),
+            (
+                (package_root / manifest.paths.get("lab", "lab/lab.json")).parent
+                / "provenance.json",
+                "provenance",
+                "lab/provenance.json",
+            ),
         )
         for path, schema_name, label in artifact_checks:
             if not path.is_file():

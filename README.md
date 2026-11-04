@@ -16,7 +16,7 @@ rules for the highest-value subset.
 - ✅ Behavioral detection rules, self-tested against synthetic data (`tests/detection/thresholds.py`).
 - ✅ Multi-range affected-version support, per-version CVE exposure, and deduplicated lab checkpoints (`triage/version_resolver.py`), with unit tests.
 - ✅ **CVE-2026-116078 validated live** on 2026-11-04: interim `1.14.0` amplified **8.90x**, patched `1.14.1` **0.58x** -> `CONFIRMED`.
-- ✅ **VulnForge M1 skeleton**: `src/vulnforge/` package + CLI, JSON Schemas, package loader/validator, and the first self-contained package at `vulnerabilities/CVE-2026-116078/`.
+- ✅ **VulnForge M1/M2 skeleton**: `src/vulnforge/` package + CLI, JSON Schemas, package loader/validator, dynamic-port lab orchestrator, per-version lockfiles, digest-pinned base image, and the first self-contained package at `vulnerabilities/CVE-2026-116078/`.
 - ⚠️ **CVE-2026-111101 remains `INCONCLUSIVE`.** The probe runs, but both `1.13.1` and `1.14.1` show large per-chunk memory growth against the large-chunk control (at 20k chunks, ~4.2 MB vs ~2.2 MB), so the current metric does not isolate the fix. It is registered but must not be cited as a confirmed finding until the probe is redesigned.
 - ⬜ The remaining 22 advisories have priority scores and analyst notes but no PoC yet -- Section "Extending" below is the pattern to follow.
 
@@ -40,13 +40,13 @@ those two things independently (see `reports/technical-report.md` Section 3)
 and prioritizes research effort by a weighted combination, not by CVSS
 alone.
 
-## VulnForge factory (M1)
+## VulnForge factory (M1/M2)
 
 The project is evolving from a Bandit research repo into **VulnForge**, a
 local-first factory that turns an advisory into a self-contained package:
 advisory, analysis, lab spec, PoC, tests, detection spec, evidence, and report.
 
-The M1 skeleton is usable now:
+The M1/M2 skeleton is usable now:
 
 ```bash
 .venv/bin/pip install -e '.[dev]'
@@ -55,14 +55,26 @@ vulnforge status
 vulnforge package list
 vulnforge package show CVE-2026-116078
 vulnforge package validate CVE-2026-116078
+
+vulnforge lab build CVE-2026-116078
+vulnforge lab start CVE-2026-116078
+vulnforge lab status CVE-2026-116078
+vulnforge lab stop CVE-2026-116078
 ```
 
 Implemented: package discovery, JSON Schema validation, cross-file consistency
-checks, advisory-to-catalog drift detection, and the first package.
+checks, advisory-to-catalog drift detection, the dynamic-port lab orchestrator,
+per-version lockfiles, digest-pinned base image, and image/build provenance.
 
-Planned and exposed as explicit stubs: `ingest` (M5), `triage`/`lab` (M2),
-`poc`/`validate` (M3), `detect`/`report` (M4). The full design is in
-[`docs/vulnforge-architecture.md`](docs/vulnforge-architecture.md).
+Planned and exposed as explicit stubs: `triage` (M2 version-plan extraction),
+`poc`/`validate` (M3), `detect`/`report` (M4), `ingest` (M5). The full design is
+in [`docs/vulnforge-architecture.md`](docs/vulnforge-architecture.md).
+
+The M2 lab lifecycle has a gated integration test:
+
+```bash
+VULNFORGE_DOCKER=1 .venv/bin/python -m unittest tests.test_lab_integration -v
+```
 
 ## Layout
 
@@ -73,11 +85,12 @@ src/vulnforge/          factory package: CLI, config, models, schemas, package v
 vulnerabilities/        one self-contained package per CVE
 schemas/                JSON Schemas for advisory/package/lab/probe/validation/detection/evidence
 docs/                   architecture and authoring docs
-lab/                    app/ (version-parameterized Plug+Bandit app), compose.yaml
+lab/                    app/ (version-parameterized Plug+Bandit app), app/locks/, compose.yaml
+.vulnforge/             generated per-package lab compose/runtime state (gitignored)
 probes/                 common.py (guardrails + memory sampler), registry.py (single PoC registry), http1/, http2/
 tests/regression/       compare_versions.py -- vulnerable-vs-patched assertions
 tests/detection/        thresholds.py -- behavioral detection rules + self-test
-tests/                  test_version_resolver.py, package/CLI/schema/golden tests
+tests/                  test_version_resolver.py, package/CLI/schema/lab/golden tests
 reports/                generate_report.py -> technical-report.md, vulnerability-matrix.csv
 evidence/metrics/       regression-results.json -- latest live A/B verdicts
 config/                 research.yaml (targets, versions), lab-limits.yaml (isolation policy), vulnforge.yaml
