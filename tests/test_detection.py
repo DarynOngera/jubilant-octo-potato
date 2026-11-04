@@ -1,7 +1,10 @@
 """Detection-runner tests against committed evidence."""
 from __future__ import annotations
 
+import json
+import shutil
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -10,8 +13,9 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from vulnforge.config import load_config  # noqa: E402
 from vulnforge.detect import ConnectionSample, evaluate_package  # noqa: E402
-from vulnforge.detect.rules import rule_memory_outlier  # noqa: E402
-from vulnforge.packages import find_package  # noqa: E402
+from vulnforge.detect.rules import DEFAULTS, rule_memory_outlier  # noqa: E402
+from vulnforge.detect.runner import _config_from_spec  # noqa: E402
+from vulnforge.packages import find_package, load_package  # noqa: E402
 from vulnforge.schema import validate_instance  # noqa: E402
 
 
@@ -80,10 +84,96 @@ class DetectionTests(unittest.TestCase):
         )
         self.assertFalse(verdict.triggered)
 
+    def test_spec_thresholds_resolve_to_config(self):
+        spec = {
+            "rules": [
+                {
+                    "id": "memory_per_connection_outlier",
+                    "threshold": {"stdevs": 4.5, "min_attack_bytes": 9_000_000},
+                },
+                {
+                    "id": "per_connection_frame_rate",
+                    "threshold": {
+                        "chunks_per_second_min": 123,
+                        "avg_chunk_bytes_max": 7,
+                    },
+                },
+                {
+                    "id": "body_duration_vs_size",
+                    "threshold": {"seconds_per_kb_max": 0.25},
+                },
+                {
+                    "id": "unbounded_process_growth",
+                    "threshold": {
+                        "min_process_growth": 2,
+                        "min_idle_growth_bytes": 3,
+                        "min_samples": 4,
+                    },
+                },
+            ]
+        }
+        cfg = _config_from_spec(spec)
+        self.assertEqual(cfg["memory_outlier_stdevs"], 4.5)
+        self.assertEqual(cfg["memory_outlier_floor_bytes"], 9_000_000)
+        self.assertEqual(cfg["max_frame_rate_per_sec"], 123)
+        self.assertEqual(cfg["min_bytes_per_frame_ok"], 7)
+        self.assertEqual(cfg["max_body_duration_per_kb_s"], 0.25)
+        self.assertEqual(cfg["min_process_growth"], 2)
+        self.assertEqual(cfg["min_idle_growth_bytes"], 3)
+        self.assertEqual(cfg["min_process_growth_samples"], 4)
+
+    def test_spec_thresholds_fall_back_to_defaults(self):
+        self.assertEqual(_config_from_spec({}), dict(DEFAULTS))
+        self.assertEqual(
+            _config_from_spec(
+                {
+                    "rules": [
+                        {"id": "unknown_rule", "threshold": {"stdevs": 99}},
+                        {
+                            "id": "memory_per_connection_outlier",
+                            "threshold": {"unknown_key": 99},
+                        },
+                    ]
+                }
+            ),
+            dict(DEFAULTS),
+        )
+
+    def test_spec_thresholds_drive_evaluate_package(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "CVE-2026-116078"
+            shutil.copytree(self.paths.packages / "CVE-2026-116078", target)
+            spec_path = target / "detection" / "spec.json"
+            spec = json.loads(spec_path.read_text())
+            memory_rule = next(
+                rule
+                for rule in spec["rules"]
+                if rule["id"] == "memory_per_connection_outlier"
+            )
+            pkg = load_package(target, self.paths.schemas)
+
+            # Lowering the floor to zero must expose the patched z > 3 runs.
+            memory_rule["threshold"]["min_attack_bytes"] = 0
+            spec_path.write_text(json.dumps(spec))
+            result = evaluate_package(pkg)
+            self.assertTrue(
+                self._rules(result, "patched")["memory_per_connection_outlier"][
+                    "triggered"
+                ]
+            )
+
+            # Raising it above every vulnerable run must suppress the rule.
+            memory_rule["threshold"]["min_attack_bytes"] = 9_000_000
+            spec_path.write_text(json.dumps(spec))
+            result = evaluate_package(pkg)
+            self.assertFalse(
+                self._rules(result, "vulnerable")["memory_per_connection_outlier"][
+                    "triggered"
+                ]
+            )
+
     def test_116078_detection_evidence_schema(self):
         pkg = find_package(self.paths, "CVE-2026-116078")
-        import json
-
         data = json.loads((pkg.root / "detection" / "evidence.json").read_text())
         self.assertEqual(
             validate_instance(data, self.paths.schemas, "detection"), []

@@ -153,12 +153,14 @@ def evaluate(
     sample: ConnectionSample,
     pool: list[ConnectionSample],
     history: list[ProcessGrowthSample] | None = None,
+    *,
+    cfg=DEFAULTS,
 ) -> list[Verdict]:
     verdicts = [
-        rule_frame_rate(sample),
-        rule_memory_outlier(sample, pool),
-        rule_body_duration(sample),
+        rule_frame_rate(sample, cfg),
+        rule_memory_outlier(sample, pool, cfg),
+        rule_body_duration(sample, cfg),
     ]
     if history is not None:
-        verdicts.append(rule_unbounded_process_growth(history))
+        verdicts.append(rule_unbounded_process_growth(history, cfg))
     return verdicts

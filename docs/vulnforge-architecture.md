@@ -248,6 +248,8 @@ M4–M7 are implemented in this branch as described below.
   run queue; probes capture a benign connection pool for outlier baselines.
 - `vulnforge.detect` evaluates the four behavioral rules offline over
   `evidence/runs` and `evidence/telemetry`.
+- Rule thresholds resolve from the package's `detection/spec.json`, falling
+  back to `vulnforge.detect.rules.DEFAULTS` for omitted keys.
 - A signal is `TRIGGERED` only when it discriminates vulnerable from patched;
   frame-rate/body-duration rules may fire on both targets by design.
 - Per-CVE `report.md`/`report.json` are generated from advisory, analysis,

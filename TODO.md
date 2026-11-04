@@ -22,6 +22,7 @@ future items.
 - [x] Re-run validation to regenerate telemetry for both packages
 - [x] Move/adapt detection rules into `vulnforge.detect`
 - [x] Build detection runner from `evidence/runs` + `evidence/telemetry`
+- [x] Resolve detection thresholds from each package's `detection/spec.json`
 - [x] Extend detection schema with per-target results
 - [x] Implement `vulnforge detect <CVE>` / `--all`
 - [x] Implement per-CVE report generator
