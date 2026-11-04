@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vulnforge.local/schemas/advisory.schema.json",
+  "title": "VulnForge Advisory",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cve",
+    "title",
+    "affected",
+    "fixed_in",
+    "track",
+    "references"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "cve": {"type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"},
+    "ghsa": {"type": ["string", "null"]},
+    "osv": {"type": ["string", "null"]},
+    "aliases": {"type": "array", "items": {"type": "string"}},
+    "title": {"type": "string", "minLength": 1},
+    "published": {"type": ["string", "null"]},
+    "cvss_score": {"type": ["number", "null"], "minimum": 0, "maximum": 10},
+    "cvss_vector": {"type": ["string", "null"]},
+    "affected": {"$ref": "#/$defs/affected"},
+    "affected_ranges": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/range"}
+    },
+    "fixed_in": {"$ref": "#/$defs/fixed_in"},
+    "track": {"type": "string", "minLength": 1},
+    "commits": {"type": "array", "items": {"type": "string"}},
+    "references": {"type": "array", "items": {"type": "string"}},
+    "provenance": {"$ref": "#/$defs/provenance"}
+  },
+  "$defs": {
+    "range": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["introduced"],
+          "properties": {
+            "introduced": {"type": "string"},
+            "fixed": {"type": ["string", "null"]},
+            "raw": {"type": "string"}
+          }
+        }
+      ]
+    },
+    "affected": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/range"}
+        }
+      ]
+    },
+    "fixed_in": {
+      "oneOf": [
+        {"type": "string", "minLength": 1},
+        {
+          "type": "array",
+          "minItems": 1,
+          "items": {"type": "string"}
+        }
+      ]
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "source": {"type": "string"},
+        "source_url": {"type": "string"},
+        "retrieved_at": {"type": "string"},
+        "source_sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+        "notes": {"type": "string"}
+      }
+    }
+  }
+}
