@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vulnforge.local/schemas/probe.schema.json",
+  "title": "VulnForge Probe Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cve",
+    "entrypoint",
+    "targets",
+    "kwargs",
+    "metric",
+    "thresholds"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "cve": {"type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"},
+    "entrypoint": {"type": "string", "pattern": "^[A-Za-z0-9_.]+:[A-Za-z_][A-Za-z0-9_]*$"},
+    "targets": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vulnerable", "patched"],
+      "properties": {
+        "vulnerable": {"type": "string", "minLength": 1},
+        "patched": {"type": "string", "minLength": 1},
+        "control": {"type": "string", "minLength": 1}
+      }
+    },
+    "kwargs": {"type": "object"},
+    "metric": {"type": "string", "minLength": 1},
+    "thresholds": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["vulnerable_min", "patched_max"],
+      "properties": {
+        "vulnerable_min": {"type": "number"},
+        "patched_max": {"type": "number"},
+        "min_samples": {"type": "integer", "minimum": 1},
+        "max_cv": {"type": "number", "minimum": 0}
+      }
+    },
+    "runs": {"type": "integer", "minimum": 1},
+    "disruptive": {"type": "boolean"}
+  }
+}

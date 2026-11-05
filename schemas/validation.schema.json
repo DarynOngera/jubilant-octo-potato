@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vulnforge.local/schemas/validation.schema.json",
+  "title": "VulnForge Validation Result",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cve",
+    "verdict",
+    "runs",
+    "started_at",
+    "finished_at",
+    "targets",
+    "aggregates"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "cve": {"type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"},
+    "verdict": {"enum": ["CONFIRMED", "FAIL", "INCONCLUSIVE", "ERROR"]},
+    "reason": {"type": "string"},
+    "runs": {"type": "integer", "minimum": 1},
+    "started_at": {"type": "string"},
+    "finished_at": {"type": "string"},
+    "targets": {"type": "object"},
+    "aggregates": {"type": "object"},
+    "image_digests": {"type": "object"},
+    "evidence_manifest": {"type": ["string", "null"]}
+  }
+}

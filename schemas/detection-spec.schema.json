@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vulnforge.local/schemas/detection-spec.schema.json",
+  "title": "VulnForge Detection Spec",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "cve", "signal", "rules"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "cve": {"type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"},
+    "signal": {"type": "string", "minLength": 1},
+    "evidence_source": {"type": "string"},
+    "rules": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "source", "description", "expected"],
+        "properties": {
+          "id": {"type": "string", "minLength": 1},
+          "source": {"type": "string", "minLength": 1},
+          "description": {"type": "string", "minLength": 1},
+          "threshold": {"type": "object"},
+          "expected": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["vulnerable", "patched"],
+            "properties": {
+              "vulnerable": {"enum": ["triggered", "not_triggered", "unknown"]},
+              "patched": {"enum": ["triggered", "not_triggered", "unknown"]}
+            }
+          }
+        }
+      }
+    }
+  }
+}

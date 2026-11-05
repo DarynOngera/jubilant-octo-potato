@@ -1,0 +1,8 @@
+## 1. Exploitability matrix
+## 2. Per-version CVE exposure
+## 3. Methodology note: why priority != CVSS
+## 4. Per-advisory detail
+## 5. PoC coverage and how to extend it
+## 6. Remediation
+## 7. Detection guidance
+## 8. Limitations

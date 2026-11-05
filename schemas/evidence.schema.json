@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vulnforge.local/schemas/evidence.schema.json",
+  "title": "VulnForge Evidence Manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "cve", "created_at", "command", "artifacts"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "cve": {"type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"},
+    "created_at": {"type": "string"},
+    "command": {"type": "array", "items": {"type": "string"}},
+    "verdict": {"enum": ["CONFIRMED", "FAIL", "INCONCLUSIVE", "ERROR"]},
+    "environment": {"type": "object"},
+    "images": {"type": "object"},
+    "artifacts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256"],
+        "properties": {
+          "path": {"type": "string", "minLength": 1},
+          "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+          "description": {"type": "string"}
+        }
+      }
+    }
+  }
+}
