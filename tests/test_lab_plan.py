@@ -132,6 +132,24 @@ class LabPlanTests(unittest.TestCase):
         intelligence = self.adapter.intelligence()
         self.assertEqual(intelligence.osv_package, {"name": "bandit", "ecosystem": "Hex"})
         self.assertEqual(intelligence.github_repo, "mtrudel/bandit")
+        self.assertEqual(self.adapter.container_ports(), (4000, 4001))
+
+    def test_status_uses_actual_published_ports(self):
+        plan = self.orch.plan(self.package)
+        service = plan.services["vulnerable"]
+        inspect = {
+            "NetworkSettings": {
+                "Ports": {
+                    "4000/tcp": [{"HostIp": "127.0.0.1", "HostPort": "5555"}],
+                    "4001/tcp": [{"HostIp": "127.0.0.1", "HostPort": "5556"}],
+                }
+            }
+        }
+        actual = self.orch._service_from_inspect(service, inspect)
+        self.assertEqual(actual.base_url, "http://127.0.0.1:5555")
+        self.assertEqual(actual.admin_url, "http://127.0.0.1:5556")
+        self.assertEqual(actual.app_port, 5555)
+        self.assertEqual(actual.admin_port, 5556)
 
     def test_image_tags_include_cve_role_and_version(self):
         self.assertEqual(

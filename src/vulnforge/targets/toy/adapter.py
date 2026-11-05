@@ -114,3 +114,7 @@ class ToyAdapter:
     def intelligence(self) -> IntelligenceSpec:
         # The toy target has no public advisory feed or commit host.
         return IntelligenceSpec(name=self.name, display_name="Toy")
+
+    def container_ports(self) -> tuple[int, int | None]:
+        # One listener serves both app and stats.
+        return (4000, None)

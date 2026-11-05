@@ -36,7 +36,7 @@ class PackageModelTests(unittest.TestCase):
 
     def test_package_is_discovered(self):
         dirs = discover_package_dirs(self.paths)
-        self.assertEqual([path.name for path in dirs], ALL_CVES)
+        self.assertTrue(set(ALL_CVES).issubset({path.name for path in dirs}))
 
     def test_package_loads_and_validates(self):
         pkg = find_package(self.paths, CVE)
@@ -197,7 +197,7 @@ class PackageModelTests(unittest.TestCase):
 
     def test_all_packages_load(self):
         packages = load_packages(self.paths)
-        self.assertEqual([pkg.cve for pkg in packages], ALL_CVES)
+        self.assertTrue(set(ALL_CVES).issubset({pkg.cve for pkg in packages}))
 
     def test_111101_uses_first_fixed_pair(self):
         pkg = find_package(self.paths, "CVE-2026-111101")

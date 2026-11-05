@@ -41,6 +41,18 @@ class UIApp:
     def known_cves(self) -> set[str]:
         return {path.name for path in discover_package_dirs(self.paths)}
 
+    def known_advisories(self) -> set[str]:
+        catalog_path = self.paths.data / "advisories.json"
+        try:
+            rows = json.loads(catalog_path.read_text()).get("advisories", [])
+        except (FileNotFoundError, json.JSONDecodeError):
+            return set()
+        return {
+            str(row.get("cve"))
+            for row in rows
+            if isinstance(row, dict) and row.get("cve")
+        }
+
 
 class UIServer(ThreadingHTTPServer):
     daemon_threads = True
@@ -209,7 +221,11 @@ class UIHandler(BaseHTTPRequestHandler):
             return
         try:
             job = self.app.jobs.submit(
-                action_id, cve, options, self.app.known_cves()
+                action_id,
+                cve,
+                options,
+                self.app.known_cves(),
+                self.app.known_advisories(),
             )
         except ValueError as exc:
             self._error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -260,6 +276,7 @@ class UIHandler(BaseHTTPRequestHandler):
             self._json(
                 actions_payload(
                     known_cves=app.known_cves(),
+                    known_catalog=app.known_advisories(),
                     docker_ok=readmodel.docker_ready(app.paths),
                     read_only=app.read_only,
                 )

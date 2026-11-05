@@ -48,6 +48,7 @@ class AdapterBoundaryTests(unittest.TestCase):
         self.assertEqual(sample.total, 123)
         self.assertEqual(adapter.intelligence().name, "toy")
         self.assertIsNone(adapter.intelligence().osv_package)
+        self.assertEqual(adapter.container_ports(), (4000, None))
 
     def test_core_has_no_bandit_imports(self):
         core = [

@@ -183,19 +183,26 @@ vulnforge ui --read-only     # disable action buttons and POSTs
 
 Pages:
 
-- **Overview** — package status, verdict/detection badges, priority top-N,
-  provenance state.
-- **CVE detail** — advisory, validation medians/ranges, detection rules and
-  thresholds, evidence hashes and image provenance, rendered `report.md`, and
-  downloadable `.md`/`.json` reports.
-- **Labs** — live runtime status, service URLs, and Build/Start/Stop actions.
+- **Overview** — lifecycle-aware package summary, next action per package,
+  priority top-N, and provenance state.
+- **Packages** — full package table with lifecycle stage and next step; “New
+  package” scaffolds from the advisory catalog.
+- **CVE detail** — lifecycle rail, next-step action, grouped Lab/Evidence/Report
+  actions, advisory, validation medians/ranges, detection rules and thresholds,
+  evidence hashes and image provenance, rendered `report.md`, and downloadable
+  `.md`/`.json` reports.
+- **Labs** — live runtime status, actual Docker-published URLs, and
+  Build/Start/Stop/Run PoC/Validate actions.
 - **Priority matrix** — the 24-advisory matrix with package links.
 - **Activity** — queued/running/completed jobs with streamed CLI logs.
 - **Health** — the same checks as `vulnforge doctor`.
 
-Actions are restricted to an allowlist: `lab build|start|stop`, `validate`,
-`poc run`, `detect`, `report`, `package validate`, and `triage --check`. Jobs run
-one at a time through the installed `vulnforge` CLI, never through a shell. The
+Actions are restricted to an allowlist: `package scaffold`, `lab build|start|stop`,
+`validate`, `poc run`, `detect`, `report`, `package validate`, and
+`triage --check`. Actions that are not ready are disabled with the reason
+(“Start the lab and implement the probe first”, “Run validation before
+detection”, etc.). Jobs run one at a time through the installed `vulnforge`
+CLI, never through a shell. The
 server rejects non-loopback `Host` headers and cross-origin POSTs, requires a
 per-process CSRF token, and never interpolates browser input into file paths.
 Mutating actions rewrite the same tracked evidence as their CLI equivalents, so
@@ -319,7 +326,7 @@ Typical full regeneration:
 ## 2. Tests and detection self-test
 
 ```bash
-# All Python unit tests (131 currently; 2 Docker integration tests skipped by default)
+# All Python unit tests (136 currently; 2 Docker integration tests skipped by default)
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 
 # Lint

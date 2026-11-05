@@ -129,24 +129,84 @@
       </div>`).join("")}</div>`;
   }
 
+  function packageState(cve) {
+    if (!cve) return null;
+    if (state.detail?.summary?.cve === cve) return state.detail.summary;
+    return (state.portfolio?.packages || []).find((pkg) => pkg.cve === cve) || null;
+  }
+
+  function actionReadiness(id, cve) {
+    const pkg = packageState(cve);
+    return pkg?.lifecycle?.actions?.[id] || null;
+  }
+
   function actionButton(id, cve, label) {
     const action = state.actions.find((item) => item.id === id);
     if (!action) return "";
-    const disabled = action.enabled ? "" : "disabled";
-    const title = action.enabled ? esc(action.description) : esc(action.disabled_reason);
-    return `<button class="btn small ${action.destructive ? "danger" : ""}" data-action="open-action" data-id="${esc(id)}" data-cve="${esc(cve || "")}" ${disabled} title="${title}">${esc(label || action.label)}</button>`;
+    const readiness = actionReadiness(id, cve);
+    const enabled = action.enabled && (!readiness || readiness.enabled);
+    const title = !action.enabled
+      ? action.disabled_reason
+      : readiness && !readiness.enabled
+        ? readiness.reason
+        : action.description;
+    const disabled = enabled ? "" : "disabled";
+    return `<button class="btn small ${action.destructive ? "danger" : ""}" data-action="open-action" data-id="${esc(id)}" data-cve="${esc(cve || "")}" ${disabled} title="${esc(title)}">${esc(label || action.label)}</button>`;
   }
 
-  function actionsRow(cve) {
-    return `<div class="actions">
-      ${actionButton("validate", cve, "Validate")}
-      ${actionButton("detect", cve, "Detect")}
-      ${actionButton("report", cve, "Report")}
-      ${actionButton("poc_run", cve, "Run PoC")}
-      ${actionButton("lab_build", cve, "Build lab")}
-      ${actionButton("lab_start", cve, "Start lab")}
-      ${actionButton("lab_stop", cve, "Stop lab")}
-      ${actionButton("package_validate", cve, "Check package")}
+  function lifecycleRail(lifecycle) {
+    if (!lifecycle) return "";
+    const stages = ["package", "lab", "probe", "validation", "detection", "report"];
+    return `<div class="lifecycle-rail">${stages.map((name) => {
+      const stage = lifecycle.stages?.[name] || { ok: false, label: name };
+      return `<span class="lifecycle-step ${stage.ok ? "done" : "pending"}" title="${esc(stage.label)}">
+        <span class="lifecycle-dot"></span>${esc(name)}
+      </span>`;
+    }).join("")}</div>`;
+  }
+
+  function nextAction(summary) {
+    const lifecycle = summary?.lifecycle;
+    if (!lifecycle) return "";
+    if (!lifecycle.next_action) {
+      return `<span class="next-step complete">${esc(lifecycle.next_label)}</span>`;
+    }
+    const action = state.actions.find((item) => item.id === lifecycle.next_action);
+    return `<span class="next-step"><span class="eyebrow">Next step</span>
+      ${actionButton(lifecycle.next_action, summary.cve, lifecycle.next_label || action?.label || lifecycle.next_action)}
+    </span>`;
+  }
+
+  function actionsRow(summary) {
+    const cve = summary.cve;
+    return `<div class="next-action-row">${nextAction(summary)}</div>
+      <div class="action-groups">
+        <span class="action-group"><span>Lab</span>
+          ${actionButton("lab_build", cve, "Build")}
+          ${actionButton("lab_start", cve, "Start")}
+          ${actionButton("lab_stop", cve, "Stop")}
+        </span>
+        <span class="action-group"><span>Evidence</span>
+          ${actionButton("poc_run", cve, "Run PoC")}
+          ${actionButton("validate", cve, "Run validation")}
+          ${actionButton("detect", cve, "Run detection")}
+        </span>
+        <span class="action-group"><span>Report</span>
+          ${actionButton("report", cve, "Generate report")}
+          ${actionButton("package_validate", cve, "Check package")}
+        </span>
+      </div>`;
+  }
+
+  function workflowStrip() {
+    return `<div class="workflow-strip">
+      <span><b>1</b> Pick a CVE</span><span class="workflow-arrow">→</span>
+      <span><b>2</b> Scaffold package</span><span class="workflow-arrow">→</span>
+      <span><b>3</b> Build / start lab</span><span class="workflow-arrow">→</span>
+      <span><b>4</b> Run PoC</span><span class="workflow-arrow">→</span>
+      <span><b>5</b> Validate</span><span class="workflow-arrow">→</span>
+      <span><b>6</b> Detect</span><span class="workflow-arrow">→</span>
+      <span><b>7</b> Report</span>
     </div>`;
   }
 
@@ -166,6 +226,7 @@
     main.innerHTML = '<div class="loading">Loading…</div>';
     try {
       if (page === "overview") await renderOverview();
+      else if (page === "packages") await renderPackages();
       else if (page === "cve") await renderCve(parts[1], parts[2] || "overview");
       else if (page === "labs") await renderLabs();
       else if (page === "matrix") await renderMatrix();
@@ -203,6 +264,9 @@
         <td>${verdictBadge(pkg.verdict)}</td>
         <td>${detectionBadge(pkg.detection)}</td>
         <td>${pkg.valid ? badge("valid", "ok") : badge("invalid", "bad")}</td>
+        <td>${pkg.lifecycle?.next_action
+          ? actionButton(pkg.lifecycle.next_action, pkg.cve, pkg.lifecycle.next_label)
+          : badge(pkg.lifecycle?.next_label || "complete", "ok")}</td>
       </tr>`).join("");
 
     main.innerHTML = `
@@ -219,8 +283,11 @@
         </div>
       </div>
 
+      ${workflowStrip()}
+
       <section class="kpis">
         <div class="kpi accent"><div class="value">${counts.packages}</div><div class="label">packaged CVEs</div></div>
+        <div class="kpi warn"><div class="value">${counts.needs_action || 0}</div><div class="label">need action</div></div>
         <div class="kpi good"><div class="value">${counts.confirmed}</div><div class="label">CONFIRMED</div></div>
         <div class="kpi warn"><div class="value">${counts.inconclusive}</div><div class="label">INCONCLUSIVE</div></div>
         <div class="kpi bad"><div class="value">${counts.triggered}</div><div class="label">detection TRIGGERED</div></div>
@@ -231,7 +298,7 @@
         <section class="card">
           <div class="card-head"><h2>Packages</h2><span class="muted">${status.packages.length} total</span></div>
           ${status.packages.length ? `<div class="table-wrap"><table>
-            <thead><tr><th>CVE</th><th>Title</th><th>Pair</th><th class="num">Vuln median</th><th class="num">Patched median</th><th>Verdict</th><th>Detection</th><th>State</th></tr></thead>
+            <thead><tr><th>CVE</th><th>Title</th><th>Pair</th><th class="num">Vuln median</th><th class="num">Patched median</th><th>Verdict</th><th>Detection</th><th>State</th><th>Next step</th></tr></thead>
             <tbody>${rows}</tbody>
           </table></div>` : empty("No packages yet.")}
         </section>
@@ -265,6 +332,44 @@
       </section>`;
   }
 
+  // -- packages ---------------------------------------------------------
+
+  async function renderPackages() {
+    const status = await ensurePortfolio();
+    const rows = status.packages.map((pkg) => `<tr>
+      <td class="mono"><a href="${cveHref(pkg.cve)}">${esc(pkg.cve)}</a></td>
+      <td>${esc(pkg.title)}</td>
+      <td>${esc(pkg.target)}</td>
+      <td class="nowrap">${esc(pkg.vulnerable_version)} → ${esc(pkg.patched_version)}</td>
+      <td>${lifecycleRail(pkg.lifecycle)}</td>
+      <td>${verdictBadge(pkg.verdict)}</td>
+      <td>${detectionBadge(pkg.detection)}</td>
+      <td>${pkg.lifecycle?.next_action
+        ? actionButton(pkg.lifecycle.next_action, pkg.cve, pkg.lifecycle.next_label)
+        : badge(pkg.lifecycle?.next_label || "complete", "ok")}</td>
+    </tr>`).join("");
+    main.innerHTML = `
+      <div class="page-head">
+        <div>
+          <div class="eyebrow">Packages</div>
+          <h1>Package lifecycle</h1>
+          <p>Each package moves through lab → probe → validation → detection → report. The next action is the only step that is ready.</p>
+        </div>
+        <div class="actions">
+          ${actionButton("package_scaffold", "", "New package")}
+          ${actionButton("package_validate", "", "Check all packages")}
+          <button class="btn small" data-action="refresh-packages">Refresh</button>
+        </div>
+      </div>
+      ${workflowStrip()}
+      <section class="card">
+        ${status.packages.length ? `<div class="table-wrap"><table>
+          <thead><tr><th>CVE</th><th>Title</th><th>Adapter</th><th>Pair</th><th>Lifecycle</th><th>Verdict</th><th>Detection</th><th>Next step</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table></div>` : empty("No packages yet. Create one with vulnforge package scaffold <CVE>.")}
+      </section>`;
+  }
+
   // -- CVE detail -------------------------------------------------------
 
   async function renderCve(cve, tab) {
@@ -294,8 +399,9 @@
             ${summary.git_dirty === true ? badge("provenance dirty", "warn") : ""}
             <span class="badge neutral">${esc(summary.vulnerable_version)} → ${esc(summary.patched_version)}</span>
           </div>
+          ${lifecycleRail(summary.lifecycle)}
         </div>
-        <div class="actions">${actionsRow(summary.cve)}<button class="btn small" data-action="refresh-detail" data-cve="${esc(summary.cve)}" data-tab="${esc(active)}">Refresh</button></div>
+        <div class="actions">${actionsRow(summary)}<button class="btn small" data-action="refresh-detail" data-cve="${esc(summary.cve)}" data-tab="${esc(active)}">Refresh</button></div>
       </div>
 
       <div class="tabs">
@@ -390,7 +496,13 @@
 
   function cveValidation(detail) {
     const validation = detail.validation;
-    if (!validation) return empty("Validation has not been run for this package.");
+    if (!validation) {
+      return `<section class="card"><div class="empty">Validation has not been run for this package.</div>
+        <div class="actions" style="margin-top:12px">
+          ${actionButton("lab_start", detail.summary.cve, "Start lab")}
+          ${actionButton("validate", detail.summary.cve, "Run validation")}
+        </div></section>`;
+    }
     const targets = validation.targets || {};
     const globalMax = Math.max(
       ...["vulnerable", "patched"].flatMap((role) => {
@@ -470,7 +582,13 @@
 
   function cveDetection(detail) {
     const detection = detail.detection;
-    if (!detection) return empty("Detection has not been run for this package.");
+    if (!detection) {
+      return `<section class="card"><div class="empty">Detection has not been run for this package.</div>
+        <div class="actions" style="margin-top:12px">
+          ${actionButton("validate", detail.summary.cve, "Run validation")}
+          ${actionButton("detect", detail.summary.cve, "Run detection")}
+        </div></section>`;
+    }
     const targets = detection.targets || {};
     const roleTables = ["vulnerable", "patched"].map((role) => {
       const target = targets[role] || {};
@@ -574,9 +692,10 @@
   // -- labs -------------------------------------------------------------
 
   async function renderLabs() {
-    const labs = await api("/api/labs");
+    const [labs] = await Promise.all([api("/api/labs"), ensurePortfolio()]);
     const docker = state.actions.find((item) => item.id === "lab_build");
     const cards = labs.map((lab) => {
+      const pkg = (state.portfolio?.packages || []).find((item) => item.cve === lab.cve);
       const services = Object.entries(lab.services || {}).map(([role, service]) => `
         <tr>
           <td>${esc(role)}</td>
@@ -598,11 +717,13 @@
           <thead><tr><th>Role</th><th>Version</th><th>Container</th><th>Health</th><th>App URL</th><th>Admin URL</th></tr></thead>
           <tbody>${services}</tbody>
         </table></div>` : empty("No runtime services recorded.")}
+        <div class="next-action-row">${pkg ? nextAction(pkg) : ""}</div>
         <div class="actions" style="margin-top:14px">
           ${actionButton("lab_build", lab.cve, "Build")}
           ${actionButton("lab_start", lab.cve, "Start")}
           ${actionButton("lab_stop", lab.cve, "Stop")}
-          <button class="btn small" data-action="open-action" data-id="validate" data-cve="${esc(lab.cve)}">Validate</button>
+          ${actionButton("poc_run", lab.cve, "Run PoC")}
+          ${actionButton("validate", lab.cve, "Validate")}
         </div>
       </section>`;
     }).join("");
@@ -798,6 +919,11 @@
     const action = state.actions.find((item) => item.id === actionId);
     if (!action) return;
     if (!action.enabled) { toast(action.disabled_reason || "Action disabled", true); return; }
+    const readiness = actionReadiness(actionId, cve);
+    if (readiness && !readiness.enabled) {
+      toast(readiness.reason || "Action is not ready", true);
+      return;
+    }
     state.modalOpen = true;
     state.modalJobId = null;
     modalTitle.textContent = action.label;
@@ -818,6 +944,19 @@
           <select id="option-${esc(name)}" name="option-${esc(name)}">
             ${(meta.choices || []).map((choice) => `<option value="${esc(choice)}" ${choice === meta.default ? "selected" : ""}>${esc(choice)}</option>`).join("")}
           </select>
+        </div>`;
+      }
+      if (meta.type === "text") {
+        return `<div class="field">
+          <label for="option-${esc(name)}">${esc(meta.label || name)}</label>
+          <input id="option-${esc(name)}" name="option-${esc(name)}" type="text" value="${meta.default == null ? "" : esc(meta.default)}">
+          ${meta.help ? `<span class="hint">${esc(meta.help)}</span>` : ""}
+        </div>`;
+      }
+      if (meta.type === "bool") {
+        return `<div class="field">
+          <label><input id="option-${esc(name)}" name="option-${esc(name)}" type="checkbox" ${meta.default ? "checked" : ""}> ${esc(meta.label || name)}</label>
+          ${meta.help ? `<span class="hint">${esc(meta.help)}</span>` : ""}
         </div>`;
       }
       return `<div class="field">
@@ -906,7 +1045,7 @@
     } else if (action === "open-job") {
       event.preventDefault();
       await openJobModal(button.dataset.id);
-    } else if (action === "refresh-overview" || action === "refresh-matrix") {
+    } else if (action === "refresh-overview" || action === "refresh-packages" || action === "refresh-matrix") {
       state.portfolio = null;
       state.matrix = null;
       await route();

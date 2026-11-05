@@ -29,6 +29,7 @@ class ActionSpec:
     category: str
     cve_required: bool = False
     cve_allowed: bool = True
+    cve_source: str = "packages"
     requires_docker: bool = False
     destructive: bool = False
     writes: tuple[str, ...] = ()
@@ -36,6 +37,37 @@ class ActionSpec:
 
 
 ACTIONS: dict[str, ActionSpec] = {
+    "package_scaffold": ActionSpec(
+        id="package_scaffold",
+        label="Scaffold package",
+        description="Create a draft package from a catalog advisory.",
+        category="package",
+        cve_required=True,
+        cve_source="catalog",
+        writes=("vulnerabilities/<CVE>/",),
+        options={
+            "target": {
+                "type": "text",
+                "default": "bandit",
+                "label": "Adapter",
+            },
+            "vulnerable": {
+                "type": "text",
+                "default": "",
+                "label": "Vulnerable version (optional)",
+            },
+            "patched": {
+                "type": "text",
+                "default": "",
+                "label": "Patched version (optional)",
+            },
+            "force": {
+                "type": "bool",
+                "default": False,
+                "label": "Overwrite existing files",
+            },
+        },
+    ),
     "lab_build": ActionSpec(
         id="lab_build",
         label="Build lab",
@@ -135,6 +167,18 @@ ACTIONS: dict[str, ActionSpec] = {
 
 
 def build_command(action_id: str, cve: str | None, options: dict[str, Any]) -> list[str]:
+    if action_id == "package_scaffold":
+        argv = ["package", "scaffold", _cve(cve)]
+        target = options.get("target")
+        if target:
+            argv.extend(["--target", str(target)])
+        for key in ("vulnerable", "patched"):
+            value = options.get(key)
+            if value:
+                argv.extend([f"--{key}", str(value)])
+        if options.get("force"):
+            argv.append("--force")
+        return argv
     if action_id == "lab_build":
         return ["lab", "build", _cve(cve)]
     if action_id == "lab_start":
@@ -172,6 +216,7 @@ def validate_request(
     cve: str | None,
     options: dict[str, Any] | None,
     known_cves: set[str],
+    known_catalog: set[str] | None = None,
 ) -> tuple[ActionSpec, dict[str, Any], list[str]]:
     spec = ACTIONS.get(action_id)
     if spec is None:
@@ -180,7 +225,11 @@ def validate_request(
     options = dict(options or {})
     if cve:
         cve = str(cve)
-        if cve not in known_cves:
+        if spec.cve_source == "catalog":
+            allowed = known_catalog if known_catalog is not None else set()
+            if cve not in allowed:
+                raise ValueError(f"unknown catalog advisory: {cve}")
+        elif cve not in known_cves:
             raise ValueError(f"unknown package: {cve}")
     if spec.cve_required and not cve:
         raise ValueError(f"{spec.label} requires a CVE")
@@ -212,6 +261,10 @@ def validate_request(
                     f"{name} must be one of: {', '.join(meta['choices'])}"
                 )
             options[name] = value
+        elif meta["type"] == "text":
+            options[name] = str(value)
+        elif meta["type"] == "bool":
+            options[name] = bool(value)
 
     return spec, options, build_command(action_id, cve, options)
 
@@ -299,8 +352,11 @@ class JobManager:
         cve: str | None,
         options: dict[str, Any] | None,
         known_cves: set[str],
+        known_catalog: set[str] | None = None,
     ) -> dict[str, Any]:
-        spec, options, argv = validate_request(action_id, cve, options, known_cves)
+        spec, options, argv = validate_request(
+            action_id, cve, options, known_cves, known_catalog
+        )
         job_id = secrets.token_hex(8)
         now = _now()
         record = {
@@ -345,7 +401,11 @@ class JobManager:
 
 
 def actions_payload(
-    *, known_cves: set[str], docker_ok: bool, read_only: bool
+    *,
+    known_cves: set[str],
+    known_catalog: set[str] | None = None,
+    docker_ok: bool,
+    read_only: bool,
 ) -> list[dict[str, Any]]:
     payload: list[dict[str, Any]] = []
     for spec in ACTIONS.values():
@@ -354,6 +414,11 @@ def actions_payload(
             reason = "UI is running in read-only mode"
         elif spec.requires_docker and not docker_ok:
             reason = "Docker daemon or Compose is not available"
+        available_cves = (
+            sorted((known_catalog or set()) - known_cves)
+            if spec.cve_source == "catalog"
+            else sorted(known_cves) if spec.cve_allowed else []
+        )
         payload.append(
             {
                 "id": spec.id,
@@ -362,13 +427,14 @@ def actions_payload(
                 "category": spec.category,
                 "cve_required": spec.cve_required,
                 "cve_allowed": spec.cve_allowed,
+                "cve_source": spec.cve_source,
                 "requires_docker": spec.requires_docker,
                 "destructive": spec.destructive,
                 "writes": list(spec.writes),
                 "options": spec.options,
                 "enabled": reason is None,
                 "disabled_reason": reason,
-                "known_cves": sorted(known_cves) if spec.cve_allowed else [],
+                "known_cves": available_cves,
             }
         )
     return payload

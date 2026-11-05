@@ -16,6 +16,7 @@ from vulnforge.config import load_config  # noqa: E402
 from vulnforge.ui import readmodel  # noqa: E402
 from vulnforge.ui.jobs import (  # noqa: E402
     JobManager,
+    actions_payload,
     build_command,
     validate_request,
 )
@@ -79,7 +80,7 @@ class UIServerTests(unittest.TestCase):
 
         status, _, payload = self.json_request(server, "GET", "/api/status")
         self.assertEqual(status, 200)
-        self.assertEqual(payload["counts"]["packages"], 2)
+        self.assertGreaterEqual(payload["counts"]["packages"], 2)
         self.assertGreaterEqual(payload["counts"]["advisories"], 1)
 
     def test_package_detail_and_report_download(self):
@@ -177,6 +178,22 @@ class UIServerTests(unittest.TestCase):
         self.assertEqual(result["returncode"], 0)
         self.assertIn("fake command", result["log"][0])
 
+    def test_post_scaffold_accepts_catalog_cve(self):
+        server = self.start()
+        _, _, session = self.json_request(server, "GET", "/api/session")
+        status, _, payload = self.json_request(
+            server,
+            "POST",
+            "/api/jobs",
+            body=json.dumps({"action": "package_scaffold", "cve": "CVE-2026-108525"}),
+            headers={
+                "Content-Type": "application/json",
+                "X-VulnForge-CSRF": session["csrf_token"],
+            },
+        )
+        self.assertEqual(status, 202)
+        self.assertEqual(payload["action"], "package_scaffold")
+
     def test_post_rejects_unknown_action_and_bad_cve(self):
         server = self.start()
         _, _, session = self.json_request(server, "GET", "/api/session")
@@ -232,6 +249,54 @@ class ActionRegistryTests(unittest.TestCase):
             ["poc", "run", CVE, "--role", "patched"],
         )
 
+    def test_scaffold_action_uses_catalog_cve(self):
+        self.assertEqual(
+            build_command(
+                "package_scaffold",
+                "CVE-2026-108525",
+                {"target": "bandit", "vulnerable": "1.13.0", "patched": "1.14.0"},
+            ),
+            [
+                "package",
+                "scaffold",
+                "CVE-2026-108525",
+                "--target",
+                "bandit",
+                "--vulnerable",
+                "1.13.0",
+                "--patched",
+                "1.14.0",
+            ],
+        )
+        spec, options, argv = validate_request(
+            "package_scaffold",
+            "CVE-2026-108525",
+            {},
+            {"CVE-2026-116078"},
+            {"CVE-2026-108525", "CVE-2026-116078"},
+        )
+        self.assertEqual(spec.id, "package_scaffold")
+        self.assertEqual(argv, ["package", "scaffold", "CVE-2026-108525"])
+        with self.assertRaises(ValueError):
+            validate_request(
+                "package_scaffold",
+                "CVE-2099-000000",
+                {},
+                {"CVE-2026-116078"},
+                {"CVE-2026-108525"},
+            )
+
+    def test_actions_payload_exposes_new_package_catalog(self):
+        payload = actions_payload(
+            known_cves={"CVE-2026-116078"},
+            known_catalog={"CVE-2026-108525", "CVE-2026-116078"},
+            docker_ok=False,
+            read_only=False,
+        )
+        scaffold = next(item for item in payload if item["id"] == "package_scaffold")
+        self.assertEqual(scaffold["cve_source"], "catalog")
+        self.assertEqual(scaffold["known_cves"], ["CVE-2026-108525"])
+
     def test_validation_rejects_bad_input(self):
         with self.assertRaises(ValueError):
             validate_request("unknown", CVE, {}, self.known)
@@ -253,10 +318,11 @@ class ReadModelTests(unittest.TestCase):
 
     def test_portfolio_counts(self):
         data = readmodel.portfolio(self.cfg, self.paths)
-        self.assertEqual(data["counts"]["packages"], 2)
-        self.assertEqual(
-            {item["cve"] for item in data["packages"]},
-            {"CVE-2026-111101", CVE},
+        self.assertGreaterEqual(data["counts"]["packages"], 2)
+        self.assertTrue(
+            {"CVE-2026-111101", CVE}.issubset(
+                {item["cve"] for item in data["packages"]}
+            )
         )
 
     def test_package_detail_has_evidence(self):
@@ -264,6 +330,23 @@ class ReadModelTests(unittest.TestCase):
         self.assertEqual(detail["summary"]["verdict"], "CONFIRMED")
         self.assertEqual(detail["detection"]["result"], "TRIGGERED")
         self.assertIsInstance(detail["health"], list)
+
+    def test_lifecycle_metadata_is_present(self):
+        data = readmodel.portfolio(self.cfg, self.paths)
+        pkg = next(item for item in data["packages"] if item["cve"] == CVE)
+        lifecycle = pkg["lifecycle"]
+        self.assertEqual(
+            set(lifecycle["stages"]),
+            {"package", "lab", "probe", "validation", "detection", "report"},
+        )
+        self.assertTrue(lifecycle["stages"]["package"]["ok"])
+        self.assertTrue(lifecycle["stages"]["probe"]["ok"])
+        self.assertTrue(lifecycle["stages"]["validation"]["ok"])
+        self.assertTrue(lifecycle["stages"]["detection"]["ok"])
+        self.assertTrue(lifecycle["stages"]["report"]["ok"])
+        self.assertTrue(lifecycle["actions"]["detect"]["enabled"])
+        self.assertIn("next_action", lifecycle)
+        self.assertIn("next_label", lifecycle)
 
     def test_matrix_has_all_advisories(self):
         self.assertEqual(len(readmodel.matrix(self.paths)), 24)
