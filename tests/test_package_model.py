@@ -25,6 +25,7 @@ from vulnforge.packages import (  # noqa: E402
 )
 
 CVE = "CVE-2026-116078"
+ALL_CVES = ["CVE-2026-111101", "CVE-2026-116078"]
 
 
 class PackageModelTests(unittest.TestCase):
@@ -35,7 +36,7 @@ class PackageModelTests(unittest.TestCase):
 
     def test_package_is_discovered(self):
         dirs = discover_package_dirs(self.paths)
-        self.assertEqual([path.name for path in dirs], [CVE])
+        self.assertEqual([path.name for path in dirs], ALL_CVES)
 
     def test_package_loads_and_validates(self):
         pkg = find_package(self.paths, CVE)
@@ -120,7 +121,9 @@ class PackageModelTests(unittest.TestCase):
         validation["last_verdict"] = "INCONCLUSIVE"
         modified = Package(
             root=pkg.root,
-            manifest=dataclasses.replace(pkg.manifest, validation=validation),
+            manifest=dataclasses.replace(
+                pkg.manifest, status="validated", validation=validation
+            ),
             advisory=pkg.advisory,
             lab=pkg.lab,
             probe=pkg.probe,
@@ -140,7 +143,17 @@ class PackageModelTests(unittest.TestCase):
 
     def test_all_packages_load(self):
         packages = load_packages(self.paths)
-        self.assertEqual([pkg.cve for pkg in packages], [CVE])
+        self.assertEqual([pkg.cve for pkg in packages], ALL_CVES)
+
+    def test_111101_uses_first_fixed_pair(self):
+        pkg = find_package(self.paths, "CVE-2026-111101")
+        self.assertTrue(pkg.is_valid, pkg.errors)
+        assert pkg.manifest is not None and pkg.probe is not None
+        self.assertEqual(pkg.manifest.vulnerable_version, "1.13.1")
+        self.assertEqual(pkg.manifest.patched_version, "1.14.0")
+        self.assertEqual(pkg.manifest.first_fixed, "1.14.0")
+        self.assertIn(pkg.manifest.status, {"poc-implemented", "inconclusive"})
+        self.assertEqual(pkg.probe.thresholds.get("mode"), "relative")
 
 
 if __name__ == "__main__":

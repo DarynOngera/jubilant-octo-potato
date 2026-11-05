@@ -76,8 +76,28 @@ The orchestrator allocates free loopback ports, namespaces the Compose project
 and containers per CVE, builds with per-version lockfiles, and records image
 provenance in the package's `lab/provenance.json`.
 
+## Validation lifecycle
+
+```bash
+vulnforge lab start <CVE>
+vulnforge poc run <CVE>
+vulnforge validate <CVE> --runs 3
+vulnforge lab stop <CVE>
+```
+
+`vulnforge validate` writes `evidence/validation.json`, per-run and telemetry
+files, logs, and a hash manifest in `evidence/execution.json`, then updates the
+package status/verdict. It exits non-zero unless the verdict is `CONFIRMED`.
+
+Verdict modes:
+
+- `absolute` — vulnerable median >= minimum, patched median <= maximum,
+  non-overlapping run ranges, patched CV within the guard.
+- `relative` — vulnerable/patched median ratio >= the pre-registered minimum.
+
 ## Current packages
 
-| CVE | Target | Status | Pair | Verdict |
-|---|---|---|---|---|
-| CVE-2026-116078 | bandit | validated | 1.14.0 -> 1.14.1 | CONFIRMED |
+| CVE | Target | Status | Pair | Metric | Verdict |
+|---|---|---|---|---|---|
+| CVE-2026-116078 | bandit | validated | 1.14.0 -> 1.14.1 | attack memory | CONFIRMED (8.03 MB vs 0.55 MB) |
+| CVE-2026-111101 | bandit | inconclusive | 1.13.1 -> 1.14.0 | attack memory | INCONCLUSIVE (1.60x < 2.00x) |

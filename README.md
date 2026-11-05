@@ -11,14 +11,14 @@ rules for the highest-value subset.
 - ✅ Independent Impact/Exploitability/Reachability/Detectability scoring + priority ranking (`triage/prioritizer.py`) -> `reports/technical-report.md`, `reports/vulnerability-matrix.csv`.
 - ✅ Version-range resolver + lab-checkpoint planner (`triage/version_resolver.py`).
 - ✅ Dockerized lab: one version-parameterized Plug/Bandit app, isolated network, resource caps (`lab/`).
-- ✅ Two implemented, wire-level PoCs for the top-ranked findings (`probes/http1`, `probes/http2`), registered once in `probes/registry.py`.
-- ✅ Patch-verification harness that runs a PoC against its correct vulnerable + patched target pair and asserts the effect collapses (`tests/regression/compare_versions.py`).
+- ✅ Two package-local, wire-level probes under `vulnerabilities/*/poc/`, run by the legacy harness and by `vulnforge validate`.
+- ✅ Patch-verification harness with multi-run medians, variance guards, telemetry, logs, and hash-checked evidence (`vulnforge validate`).
 - ✅ Behavioral detection rules, self-tested against synthetic data (`tests/detection/thresholds.py`).
 - ✅ Multi-range affected-version support, per-version CVE exposure, and deduplicated lab checkpoints (`triage/version_resolver.py`), with unit tests.
-- ✅ **CVE-2026-116078 validated live** on 2026-11-04: interim `1.14.0` amplified **8.90x**, patched `1.14.1` **0.58x** -> `CONFIRMED`. This is historical single-run evidence; a later single run was noisy, so M3 will replace it with a multi-run median/variance verdict.
-- ✅ **VulnForge M1/M2 skeleton**: `src/vulnforge/` package + CLI, JSON Schemas, package loader/validator, dynamic-port lab orchestrator, per-version lockfiles, digest-pinned base image, and the first self-contained package at `vulnerabilities/CVE-2026-116078/`.
-- ⚠️ **CVE-2026-111101 remains `INCONCLUSIVE`.** The probe runs, but both `1.13.1` and `1.14.1` show large per-chunk memory growth against the large-chunk control (at 20k chunks, ~4.2 MB vs ~2.2 MB), so the current metric does not isolate the fix. It is registered but must not be cited as a confirmed finding until the probe is redesigned.
-- ⬜ The remaining 22 advisories have priority scores and analyst notes but no PoC yet -- Section "Extending" below is the pattern to follow.
+- ✅ **CVE-2026-116078 CONFIRMED** on 2026-11-04 after the M3 multi-run validation: 100k 1-byte DATA frames, vulnerable `1.14.0` median **8.03 MB**, patched `1.14.1` median **0.55 MB**, 3 runs, non-overlapping ranges.
+- ✅ **VulnForge M1/M2/M3 skeleton**: `src/vulnforge/` package + CLI, JSON Schemas, package loader/validator, dynamic-port lab orchestrator, per-version lockfiles, digest-pinned base image, multi-run validation, and two self-contained packages.
+- ⚠️ **CVE-2026-111101 remains `INCONCLUSIVE`.** The corrected M3 pair is `1.13.1` vs `1.14.0` (first fixed, not 1.14.1). Three runs gave vulnerable median 2.80 MB vs patched 1.75 MB, a **1.60x** reduction, below the pre-registered 2.00x threshold. The result is stable and honestly inconclusive; it is not a confirmed finding.
+- ⬜ The remaining 22 advisories have priority scores and analyst notes but no package/probe yet -- Section "Extending" below is the pattern to follow.
 
 **Live lab status (2026-11-04).** All three targets build and run under the
 512 MiB cap: `4100`/`4101` = 1.13.1, `4120`/`4121` = 1.14.0, `4110`/`4111`
@@ -40,13 +40,13 @@ those two things independently (see `reports/technical-report.md` Section 3)
 and prioritizes research effort by a weighted combination, not by CVSS
 alone.
 
-## VulnForge factory (M1/M2)
+## VulnForge factory (M1/M2/M3)
 
 The project is evolving from a Bandit research repo into **VulnForge**, a
 local-first factory that turns an advisory into a self-contained package:
 advisory, analysis, lab spec, PoC, tests, detection spec, evidence, and report.
 
-The M1/M2 skeleton is usable now:
+The M1/M2/M3 factory is usable now:
 
 ```bash
 .venv/bin/pip install -e '.[dev]'
@@ -54,23 +54,28 @@ The M1/M2 skeleton is usable now:
 vulnforge status
 vulnforge package list
 vulnforge package show CVE-2026-116078
-vulnforge package validate CVE-2026-116078
+vulnforge package validate
 
 vulnforge lab build CVE-2026-116078
 vulnforge lab start CVE-2026-116078
 vulnforge lab status CVE-2026-116078
+
+vulnforge poc run CVE-2026-116078
+vulnforge validate CVE-2026-116078 --runs 3
 vulnforge lab stop CVE-2026-116078
 ```
 
 Implemented: package discovery, JSON Schema validation, cross-file consistency
 checks, advisory-to-catalog drift detection, the dynamic-port lab orchestrator,
-per-version lockfiles, digest-pinned base image, and image/build provenance.
+per-version lockfiles, digest-pinned base image, image/build provenance,
+package-local probes, runtime integration, multi-run medians/variance guards,
+and hash-checked evidence bundles.
 
-Planned and exposed as explicit stubs: `triage` (M2 version-plan extraction),
-`poc`/`validate` (M3), `detect`/`report` (M4), `ingest` (M5). The full design is
-in [`docs/vulnforge-architecture.md`](docs/vulnforge-architecture.md).
+Planned and exposed as explicit stubs: `triage` (version-plan extraction),
+`detect`/`report` (M4), `ingest` (M5). The full design is in
+[`docs/vulnforge-architecture.md`](docs/vulnforge-architecture.md).
 
-The M2 lab lifecycle has a gated integration test:
+Gated Docker integration test:
 
 ```bash
 VULNFORGE_DOCKER=1 .venv/bin/python -m unittest tests.test_lab_integration -v
@@ -90,9 +95,10 @@ lab/                    app/ (version-parameterized Plug+Bandit app), app/locks/
 probes/                 common.py (guardrails + memory sampler), registry.py (single PoC registry), http1/, http2/
 tests/regression/       compare_versions.py -- vulnerable-vs-patched assertions
 tests/detection/        thresholds.py -- behavioral detection rules + self-test
-tests/                  test_version_resolver.py, package/CLI/schema/lab/golden tests
+tests/                  resolver, package, CLI, schema, lab-plan, validation, golden tests
 reports/                generate_report.py -> technical-report.md, vulnerability-matrix.csv
-evidence/metrics/       regression-results.json -- latest live A/B verdicts
+evidence/metrics/       historical single-run regression results
+vulnerabilities/<CVE>/evidence/  M3 validation bundle (validation.json, runs, telemetry, logs)
 config/                 research.yaml (targets, versions), lab-limits.yaml (isolation policy), vulnforge.yaml
 ```
 
@@ -121,14 +127,16 @@ curl http://127.0.0.1:4100/healthz   # vulnerable (1.13.1)
 curl http://127.0.0.1:4120/healthz   # interim (1.14.0)
 curl http://127.0.0.1:4110/healthz   # patched (1.14.1)
 
-# 3. Run a PoC directly
-python3 probes/http1/poc_111101_chunk_amplification.py --n-chunks 20000 --target both
-python3 probes/http2/poc_116078_data_frame_amplification.py --n-frames 20000 --target both
+# 3. Package lab, probe, and multi-run validation
+vulnforge lab start CVE-2026-116078
+python3 vulnerabilities/CVE-2026-116078/poc/exploit.py --role both
+vulnforge validate CVE-2026-116078 --runs 3
+vulnforge lab stop CVE-2026-116078
 
-# 4. Run it as a pass/fail regression (A/B + assertion)
-python3 tests/regression/compare_versions.py --all --json-out evidence/metrics/regression-results.json
+# 4. Legacy single-run harness against the fixed-port lab
+python3 tests/regression/compare_versions.py --cve CVE-2026-116078
 
-# 5. Tear down
+# 5. Tear down the fixed-port lab
 docker compose -f lab/compose.yaml down -v
 ```
 
@@ -161,8 +169,9 @@ Full policy: `config/lab-limits.yaml`.
 2. Read its analyst note in `triage/prioritizer.py` (`SCORES[cve]["notes"]`)
    and its fixing commit diff on GitHub (linked from the advisory and from
    `data/advisories.json`) to pin down the exact mechanism.
-3. Copy the closest existing PoC in `probes/` as a starting point -- the
-   HTTP/1 and HTTP/2 amplification PoCs share an in-flight
+3. Copy the closest existing package probe under
+   `vulnerabilities/<CVE>/poc/exploit.py` as a starting point -- the
+   HTTP/1 and HTTP/2 amplification probes share an in-flight
    `/admin/stats` peak-memory comparison pattern that generalizes to most
    of the resource-exhaustion family. The WebSocket family needs a
    `websocket` client (see the stub endpoint already wired in
@@ -170,10 +179,10 @@ Full policy: `config/lab-limits.yaml`.
    needs a second "front-end" process (e.g. a reverse proxy container) in
    front of Bandit, since smuggling impact is a property of the pair, not
    Bandit alone -- see the analyst note on CVE-2026-114216.
-4. Register the new probe in `probes/registry.py` with the correct
-   vulnerable/patched target pair and amplification thresholds.
-5. Re-run `reports/generate_report.py` -- the PoC-coverage note in
-   Section 5 of the report updates automatically from that registry.
+4. Declare the probe in `vulnerabilities/<CVE>/poc/manifest.json` with the
+   correct vulnerable/patched target names, metric, and thresholds.
+5. Run `vulnforge validate <CVE> --runs 3`, then regenerate the report.
+   Section 5 of the report reads package validation evidence automatically.
 
 ## Best practices this scaffold enforces
 
@@ -181,9 +190,6 @@ Full policy: `config/lab-limits.yaml`.
   the report, matrix, and lab-checkpoint plan are all *generated* from it,
   never hand-edited independently.
 - CVSS is preserved verbatim and never blended into the priority score.
-- Every regression run pairs a probe with a vulnerable target and a patched
-  target in the same invocation (`probes/registry.py` records the pair;
-  `compare_versions.py` refuses to treat a non-reproducing probe as success).
 - Detection rules are behavioral/statistical (frame-rate-vs-payload-size,
   memory-per-connection outlier, duration-vs-size, idle process growth),
   not payload signatures, so they generalize past the exact PoC bytes.
@@ -194,5 +200,12 @@ Full policy: `config/lab-limits.yaml`.
   global catalog; `vulnforge package validate` fails on drift, missing
   artifacts, mismatched versions, or a validation status that disagrees with
   the recorded verdict.
+- Validation verdicts come from repeated runs (medians, a patched-CV guard, and
+  non-overlapping run ranges in absolute mode), never from a single run. The
+  lab exposes a forced-GC endpoint and probes run the control first to avoid
+  residual-memory bias. The validator exits non-zero for `FAIL`,
+  `INCONCLUSIVE`, and `ERROR`.
+- Evidence bundles include raw runs, `/admin/stats` telemetry, container logs,
+  image IDs, and SHA-256 hashes; reports are generated from the bundle.
 - Lab containers are disposable, capability-dropped, resource-capped, and
   loopback-only by default.

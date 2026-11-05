@@ -28,14 +28,14 @@ class CliTests(unittest.TestCase):
         code, out, _ = run_cli("status")
         self.assertEqual(code, 0)
         self.assertIn(CVE, out)
-        self.assertIn("CONFIRMED", out)
+        self.assertIn("1.14.0 -> 1.14.1", out)
 
     def test_status_json(self):
         code, out, _ = run_cli("status", "--json")
         self.assertEqual(code, 0)
         payload = json.loads(out)
-        self.assertEqual([item["cve"] for item in payload], [CVE])
-        self.assertTrue(payload[0]["valid"])
+        self.assertEqual([item["cve"] for item in payload], ["CVE-2026-111101", "CVE-2026-116078"])
+        self.assertTrue(all(item["valid"] for item in payload))
 
     def test_package_list(self):
         code, out, _ = run_cli("package", "list")
@@ -47,7 +47,7 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn("1.14.0", out)
         self.assertIn("1.14.1", out)
-        self.assertIn("CONFIRMED", out)
+        self.assertIn("verdict:", out)
 
     def test_package_show_unknown(self):
         code, _, err = run_cli("package", "show", "CVE-2026-000000")
@@ -59,19 +59,37 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertIn(f"OK   {CVE}", out)
 
+    def test_package_validate_111101(self):
+        code, out, _ = run_cli("package", "validate", "CVE-2026-111101")
+        self.assertEqual(code, 0)
+        self.assertIn("OK   CVE-2026-111101", out)
+
     def test_package_validate_all_json(self):
         code, out, _ = run_cli("package", "validate", "--all", "--json")
         self.assertEqual(code, 0)
         payload = json.loads(out)
-        self.assertEqual(payload[0]["cve"], CVE)
-        self.assertTrue(payload[0]["ok"])
-        self.assertEqual(payload[0]["errors"], [])
+        self.assertEqual(
+            [item["cve"] for item in payload],
+            ["CVE-2026-111101", "CVE-2026-116078"],
+        )
+        self.assertTrue(all(item["ok"] for item in payload))
+        self.assertTrue(all(item["errors"] == [] for item in payload))
 
     def test_planned_commands_are_explicit(self):
-        code, _, err = run_cli("validate", CVE)
+        code, _, err = run_cli("detect", CVE)
         self.assertEqual(code, 2)
         self.assertIn("not implemented", err)
-        self.assertIn("M3", err)
+        self.assertIn("M4", err)
+
+    def test_validate_without_runtime_is_helpful(self):
+        code, _, err = run_cli("validate", "CVE-2026-111101")
+        self.assertEqual(code, 2)
+        self.assertIn("lab start CVE-2026-111101", err)
+
+    def test_poc_without_runtime_is_helpful(self):
+        code, _, err = run_cli("poc", "run", "CVE-2026-111101")
+        self.assertEqual(code, 2)
+        self.assertIn("lab start CVE-2026-111101", err)
 
 
 if __name__ == "__main__":
