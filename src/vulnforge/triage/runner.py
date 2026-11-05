@@ -56,12 +56,15 @@ def run_triage(
     resolver = paths.root / "triage" / "version_resolver.py"
     prioritizer = paths.root / "triage" / "prioritizer.py"
     if check:
-        result = _run(paths, [str(resolver), "--check"])
+        resolver_result = _run(paths, [str(resolver), "--check"])
+        prioritizer_result = _run(paths, [str(prioritizer), "--check"])
         return {
             "check": True,
-            "returncode": result.returncode,
-            "stdout": result.stdout,
-            "stderr": result.stderr,
+            "returncode": max(
+                resolver_result.returncode, prioritizer_result.returncode
+            ),
+            "stdout": resolver_result.stdout + prioritizer_result.stdout,
+            "stderr": resolver_result.stderr + prioritizer_result.stderr,
         }
 
     resolver_result = _run(paths, [str(resolver)])

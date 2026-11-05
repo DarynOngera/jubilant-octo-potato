@@ -82,7 +82,7 @@ multi-run workflow.
 | `schemas/` | JSON Schemas for advisory, package, lab, probe, validation, detection, evidence |
 | `docs/` | Architecture and authoring documentation |
 | `triage/version_resolver.py` | Multi-range parser, exposure map, checkpoints |
-| `triage/prioritizer.py` | I/E/R/D scores + `priority_P` ranking |
+| `triage/prioritizer.py` | Loads `data/prioritization.json`, applies config weights/tiers, writes the matrix |
 | `reports/generate_report.py` | Builds `reports/technical-report.md` |
 | `probes/common.py` | Target guardrails, budgets, in-flight memory sampler |
 | `probes/registry.py` | Legacy single-run registry (historical; package manifests are M3 source of truth) |
@@ -243,9 +243,11 @@ it should be the broadest range. `affected_ranges` carries the full list.
 .venv/bin/python triage/prioritizer.py --csv reports/vulnerability-matrix.csv
 ```
 
-Writes `data/vulnerability-matrix.json` and, with `--csv`, the CSV. Every
-CVE in `SCORES` must exist in `data/advisories.json`; add both together
-when introducing a new advisory.
+Writes `data/vulnerability-matrix.json` and, with `--csv`, the CSV.
+Scores live in `data/prioritization.json`; weights and exploitability tiers
+live in `config/research.yaml`. Every advisory must have exactly one score
+entry, and no score may reference an unknown CVE. Use `--check` to verify the
+checked-in matrix is current.
 
 ### Report
 
@@ -253,12 +255,13 @@ when introducing a new advisory.
 .venv/bin/python reports/generate_report.py
 ```
 
-Reads `data/advisories.json`, `data/vulnerability-matrix.json`,
-`config/research.yaml`, `probes/registry.py`, package `poc/manifest.json`
-files, and package `evidence/validation.json` files. Section 5 includes the
-latest M3 multi-run verdicts and falls back to legacy single-run results only
-when no package validation exists. Re-run this after changing advisories,
-scores, PoCs, or validation evidence.
+Reads `data/advisories.json`, `data/prioritization.json`,
+`data/vulnerability-matrix.json`, `config/research.yaml`,
+`probes/registry.py`, package `poc/manifest.json` files, and package
+`evidence/validation.json` files. Section 5 includes the latest multi-run
+verdicts and falls back to legacy single-run results only when no package
+validation exists. Re-run this after changing advisories, scores, PoCs, or
+validation evidence.
 
 Typical full regeneration:
 
@@ -267,6 +270,7 @@ Typical full regeneration:
 .venv/bin/python triage/prioritizer.py --csv reports/vulnerability-matrix.csv
 .venv/bin/python reports/generate_report.py
 .venv/bin/python triage/version_resolver.py --check
+.venv/bin/python triage/prioritizer.py --check
 ```
 
 ---
@@ -274,7 +278,7 @@ Typical full regeneration:
 ## 2. Tests and detection self-test
 
 ```bash
-# All Python unit tests (92 currently; 2 Docker integration tests skipped by default)
+# All Python unit tests (103 currently; 2 Docker integration tests skipped by default)
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 
 # Lint
@@ -557,8 +561,8 @@ schedule.
 1. Edit `data/advisories.json`.
 2. Use `affected_ranges` for multiple ranges; keep `affected` as the
    broadest scalar.
-3. Add a `SCORES` entry in `triage/prioritizer.py` with `I/E/R/D` and
-   `notes`.
+3. Add a score entry in `data/prioritization.json` with `impact`,
+   `exploitability`, `reachability`, `detectability`, and `notes`.
 4. Regenerate:
 
    ```bash

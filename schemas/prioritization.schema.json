@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vulnforge.local/schemas/prioritization.schema.json",
+  "title": "VulnForge Prioritization Scores",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scores"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "rubric": {"type": "string"},
+    "scores": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "impact",
+          "exploitability",
+          "reachability",
+          "detectability",
+          "notes"
+        ],
+        "properties": {
+          "impact": {"type": "integer", "minimum": 0, "maximum": 10},
+          "exploitability": {"type": "integer", "minimum": 0, "maximum": 10},
+          "reachability": {"type": "integer", "minimum": 0, "maximum": 10},
+          "detectability": {"type": "integer", "minimum": 0, "maximum": 10},
+          "notes": {"type": "string", "minLength": 1},
+          "assumptions": {
+            "type": "array",
+            "items": {"type": "string"}
+          }
+        }
+      }
+    }
+  }
+}

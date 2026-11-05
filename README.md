@@ -8,7 +8,7 @@ rules for the highest-value subset.
 
 **Status as built in this scaffold:**
 - ✅ All 24 advisories normalized into `data/advisories.json`, verified against the live Hex advisory page on 2026-11-04.
-- ✅ Independent Impact/Exploitability/Reachability/Detectability scoring + priority ranking (`triage/prioritizer.py`) -> `reports/technical-report.md`, `reports/vulnerability-matrix.csv`.
+- ✅ Independent Impact/Exploitability/Reachability/Detectability scoring + priority ranking (`data/prioritization.json` + `config/research.yaml` weights/tiers) -> `reports/technical-report.md`, `reports/vulnerability-matrix.csv`.
 - ✅ Version-range resolver + lab-checkpoint planner (`triage/version_resolver.py`).
 - ✅ Dockerized lab: one version-parameterized Plug/Bandit app, isolated network, resource caps (`lab/`).
 - ✅ Two package-local, wire-level probes under `vulnerabilities/*/poc/`, run by the legacy harness and by `vulnforge validate`.
@@ -180,7 +180,7 @@ Full policy: `config/lab-limits.yaml`.
    `priority_P` item without a PoC, and Section 2 for whether the lab's
    `1.13.1` checkpoint is actually vulnerable to it. If it is fixed before
    1.13.1, add the matching older checkpoint image first.
-2. Read its analyst note in `triage/prioritizer.py` (`SCORES[cve]["notes"]`)
+2. Read its analyst note in `data/prioritization.json` (`scores[cve]["notes"]`)
    and run `vulnforge analyze <CVE> --refresh` to capture the fixing commit
    diffs and generate a root-cause scaffold. Review the diff; the recorded
    commits are not always the real fix.

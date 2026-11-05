@@ -1,0 +1,174 @@
+{
+  "schema_version": "1.0",
+  "rubric": "Analyst-assigned 0-10 axes. I=impact, E=exploitability, R=reachability, D=detectability. Weights and tiers live in config/research.yaml.",
+  "scores": {
+    "CVE-2026-105659": {
+      "impact": 7,
+      "exploitability": 6,
+      "reachability": 7,
+      "detectability": 7,
+      "notes": "Timer-reset trickle attack; needs sustained low-rate WINDOW_UPDATEs, good for a long-duration lab run rather than a quick PoC."
+    },
+    "CVE-2026-105660": {
+      "impact": 4,
+      "exploitability": 6,
+      "reachability": 7,
+      "detectability": 5,
+      "notes": "Trivial to send a crafted request-target; real impact depends entirely on whether the app trusts conn.host/conn.port for authz or routing decisions."
+    },
+    "CVE-2026-108525": {
+      "impact": 8,
+      "exploitability": 6,
+      "reachability": 8,
+      "detectability": 8,
+      "notes": "Requires understanding Bandit's flow-control accounting (send WINDOW_UPDATE generously, never let the stream process drain) -- more h2 state-machine work than 116078."
+    },
+    "CVE-2026-108529": {
+      "impact": 6,
+      "exploitability": 5,
+      "reachability": 6,
+      "detectability": 6,
+      "notes": "Quadratic cost needs many blocked streams plus repeated SETTINGS/stream-0 WINDOW_UPDATE; more streams to orchestrate."
+    },
+    "CVE-2026-109584": {
+      "impact": 6,
+      "exploitability": 5,
+      "reachability": 6,
+      "detectability": 6,
+      "notes": "Cookie-crumb join amplification depends on HPACK header-block construction, more encoding nuance than raw frame spam."
+    },
+    "CVE-2026-110314": {
+      "impact": 3,
+      "exploitability": 5,
+      "reachability": 5,
+      "detectability": 5,
+      "notes": "Post-close frame delivery; mostly an application-correctness/isolation issue, modest direct security impact."
+    },
+    "CVE-2026-110499": {
+      "impact": 6,
+      "exploitability": 5,
+      "reachability": 6,
+      "detectability": 6,
+      "notes": "HPACK dynamic-table size update per response; needs many requests over one connection to accumulate state."
+    },
+    "CVE-2026-111101": {
+      "impact": 8,
+      "exploitability": 9,
+      "reachability": 10,
+      "detectability": 9,
+      "notes": "Plain HTTP/1.1, no TLS/ALPN juggling, no auth, no special client lib. Single connection, trickle 1-byte chunks. Easiest PoC in the set."
+    },
+    "CVE-2026-111103": {
+      "impact": 6,
+      "exploitability": 4,
+      "reachability": 5,
+      "detectability": 5,
+      "notes": "Requires driving streams into StreamError recovery repeatedly to roll back connection-level counters; more protocol-edge-case orchestration."
+    },
+    "CVE-2026-113436": {
+      "impact": 6,
+      "exploitability": 7,
+      "reachability": 9,
+      "detectability": 7,
+      "notes": "Oversized Content-Length / Host port digit strings; trivial to construct, impact is parse-time CPU not memory."
+    },
+    "CVE-2026-114213": {
+      "impact": 7,
+      "exploitability": 6,
+      "reachability": 6,
+      "detectability": 7,
+      "notes": "1-byte continuation frames bypassing max_fragmented_message_size; needs a WS handshake first but payload construction is simple."
+    },
+    "CVE-2026-114216": {
+      "impact": 5,
+      "exploitability": 4,
+      "reachability": 4,
+      "detectability": 5,
+      "notes": "Needs a front-end proxy with different line-ending tolerance in front of Bandit to matter; pure-Bandit repro shows parser behavior only, not smuggling impact."
+    },
+    "CVE-2026-115269": {
+      "impact": 7,
+      "exploitability": 6,
+      "reachability": 7,
+      "detectability": 7,
+      "notes": "Same family as 105659 -- SETTINGS/WINDOW_UPDATE resets the body-read timeout instead of the blocked-send deadline."
+    },
+    "CVE-2026-116078": {
+      "impact": 8,
+      "exploitability": 7,
+      "reachability": 9,
+      "detectability": 9,
+      "notes": "Needs an HTTP/2 client (h2) but otherwise a single stream of 1-byte DATA frames; very clean memory signal, good PoC candidate."
+    },
+    "CVE-2026-39803": {
+      "impact": 8,
+      "exploitability": 8,
+      "reachability": 10,
+      "detectability": 8,
+      "notes": "Body-size cap silently not enforced during streaming reads; needs a body-consuming Plug but no other prerequisite."
+    },
+    "CVE-2026-39804": {
+      "impact": 7,
+      "exploitability": 5,
+      "reachability": 5,
+      "detectability": 6,
+      "notes": "permessage-deflate zip-bomb; requires negotiating the extension and crafting a compressible payload -- moderately more work."
+    },
+    "CVE-2026-39805": {
+      "impact": 5,
+      "exploitability": 4,
+      "reachability": 4,
+      "detectability": 5,
+      "notes": "CL.CL duplicate Content-Length; same caveat -- exploitability is a property of the proxy/Bandit pair, not Bandit alone."
+    },
+    "CVE-2026-39806": {
+      "impact": 7,
+      "exploitability": 6,
+      "reachability": 8,
+      "detectability": 6,
+      "notes": "Needs a trailer-bearing chunked request to hit the decoder loop; slightly more wire-format precision than the two above."
+    },
+    "CVE-2026-39807": {
+      "impact": 3,
+      "exploitability": 5,
+      "reachability": 5,
+      "detectability": 4,
+      "notes": "Client-supplied scheme trusted without transport check; impact is app-level (e.g. incorrect redirect/secure-cookie logic) not Bandit crashing."
+    },
+    "CVE-2026-42786": {
+      "impact": 7,
+      "exploitability": 6,
+      "reachability": 6,
+      "detectability": 6,
+      "notes": "Unbounded fragment reassembly pre-1.11; same shape as 114213 on an older code path."
+    },
+    "CVE-2026-42788": {
+      "impact": 4,
+      "exploitability": 5,
+      "reachability": 6,
+      "detectability": 5,
+      "notes": "Frame-size check ordering bug; impact capped at VA:L per CVSS, smaller blast radius than the rest of the HTTP/2 family."
+    },
+    "CVE-2026-65623": {
+      "impact": 6,
+      "exploitability": 5,
+      "reachability": 6,
+      "detectability": 6,
+      "notes": "Quadratic CPU on fragment reassembly; CPU-bound rather than memory-bound, needs wall-clock timing to observe cleanly."
+    },
+    "CVE-2026-74836": {
+      "impact": 6,
+      "exploitability": 5,
+      "reachability": 6,
+      "detectability": 6,
+      "notes": "Connection-window starvation pins Plug processes; needs the connection window, not just stream windows, held at zero."
+    },
+    "CVE-2026-75484": {
+      "impact": 4,
+      "exploitability": 6,
+      "reachability": 7,
+      "detectability": 5,
+      "notes": "CRLF/NUL in HTTP/2 header values reaching the app; impact is header/log/response-splitting downstream of Bandit, not in Bandit itself."
+    }
+  }
+}
