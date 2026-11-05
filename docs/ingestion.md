@@ -2,11 +2,17 @@
 
 ## Ingest
 
+The target name comes from `config/vulnforge.yaml`; the adapter supplies the
+OSV ecosystem/package and the GitHub repository used by `analyze`.
+
 ```bash
 vulnforge ingest bandit --refresh          # fetch OSV, write a proposal
 vulnforge ingest bandit --offline --raw path/to/snapshot.json
 vulnforge ingest bandit --refresh --apply  # explicit apply
 ```
+
+A target with no OSV coordinates (for example the toy adapter) is refused with
+a clear error rather than falling back to Bandit's package name.
 
 Default behavior is a dry-run:
 

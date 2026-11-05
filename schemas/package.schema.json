@@ -7,15 +7,22 @@
   "required": [
     "schema_version",
     "cve",
-    "target",
     "status",
     "versions",
     "paths"
   ],
   "properties": {
-    "schema_version": {"const": "1.0"},
-    "cve": {"type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"},
-    "target": {"type": "string", "minLength": 1},
+    "schema_version": {
+      "const": "1.0"
+    },
+    "cve": {
+      "type": "string",
+      "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"
+    },
+    "target": {
+      "type": "string",
+      "minLength": 1
+    },
     "status": {
       "enum": [
         "draft",
@@ -29,17 +36,35 @@
     "versions": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["vulnerable", "patched", "first_fixed", "affected"],
+      "required": [
+        "vulnerable",
+        "patched",
+        "first_fixed",
+        "affected"
+      ],
       "properties": {
-        "vulnerable": {"type": "string", "minLength": 1},
-        "patched": {"type": "string", "minLength": 1},
-        "first_fixed": {"type": "string", "minLength": 1},
+        "vulnerable": {
+          "type": "string",
+          "minLength": 1
+        },
+        "patched": {
+          "type": "string",
+          "minLength": 1
+        },
+        "first_fixed": {
+          "type": "string",
+          "minLength": 1
+        },
         "affected": {
           "type": "array",
           "minItems": 1,
-          "items": {"$ref": "#/$defs/range"}
+          "items": {
+            "$ref": "#/$defs/range"
+          }
         },
-        "patched_reason": {"type": "string"}
+        "patched_reason": {
+          "type": "string"
+        }
       }
     },
     "paths": {
@@ -55,54 +80,126 @@
         "evidence"
       ],
       "properties": {
-        "advisory": {"type": "string"},
-        "analysis": {"type": "string"},
-        "lab": {"type": "string"},
-        "poc": {"type": "string"},
-        "tests": {"type": "string"},
-        "detection": {"type": "string"},
-        "evidence": {"type": "string"},
-        "report": {"type": "string"}
+        "advisory": {
+          "type": "string"
+        },
+        "analysis": {
+          "type": "string"
+        },
+        "lab": {
+          "type": "string"
+        },
+        "poc": {
+          "type": "string"
+        },
+        "tests": {
+          "type": "string"
+        },
+        "detection": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "string"
+        },
+        "report": {
+          "type": "string"
+        }
       }
     },
     "validation": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "predicate": {"type": "string"},
-        "last_verdict": {
-          "enum": ["CONFIRMED", "FAIL", "INCONCLUSIVE", "ERROR", "NOT_RUN"]
+        "predicate": {
+          "type": "string"
         },
-        "last_run_at": {"type": ["string", "null"]},
-        "evidence": {"type": ["string", "null"]},
-        "notes": {"type": "string"}
+        "last_verdict": {
+          "enum": [
+            "CONFIRMED",
+            "FAIL",
+            "INCONCLUSIVE",
+            "ERROR",
+            "NOT_RUN"
+          ]
+        },
+        "last_run_at": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "evidence": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "notes": {
+          "type": "string"
+        }
       }
     },
     "provenance": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "source": {"type": "string"},
-        "created_at": {"type": "string"},
-        "notes": {"type": "string"}
+        "source": {
+          "type": "string"
+        },
+        "created_at": {
+          "type": "string"
+        },
+        "notes": {
+          "type": "string"
+        }
       }
+    },
+    "adapter": {
+      "type": "string",
+      "minLength": 1
     }
   },
   "$defs": {
     "range": {
       "oneOf": [
-        {"type": "string", "minLength": 1},
+        {
+          "type": "string",
+          "minLength": 1
+        },
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["introduced"],
+          "required": [
+            "introduced"
+          ],
           "properties": {
-            "introduced": {"type": "string"},
-            "fixed": {"type": ["string", "null"]},
-            "raw": {"type": "string"}
+            "introduced": {
+              "type": "string"
+            },
+            "fixed": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "raw": {
+              "type": "string"
+            }
           }
         }
       ]
     }
-  }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "target"
+      ]
+    },
+    {
+      "required": [
+        "adapter"
+      ]
+    }
+  ]
 }

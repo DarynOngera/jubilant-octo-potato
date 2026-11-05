@@ -6,33 +6,50 @@ from pathlib import Path
 from typing import Any
 
 from ..paths import Paths
+from ..targets.intelligence import IntelligenceSpec
 from .osv import IngestError, fetch_osv, load_snapshot, normalize_osv, save_snapshot
 from .proposal import load_catalog, merge_advisories, write_proposal
 
+BANDIT_INTELLIGENCE = IntelligenceSpec(
+    name="bandit",
+    display_name="Bandit",
+    ecosystem="Hex",
+    package="bandit",
+    github_repo="mtrudel/bandit",
+    advisories_url="https://hex.pm/packages/bandit/advisories",
+)
 
-def ingest_bandit(
+
+def ingest_target(
     paths: Paths,
+    target: IntelligenceSpec,
     *,
     offline: bool = False,
     apply: bool = False,
     raw_path: Path | None = None,
 ) -> dict[str, Any]:
-    cache_path = paths.root / "data" / "raw" / "osv" / "bandit.json"
+    osv_package = target.osv_package
+    if osv_package is None:
+        raise IngestError(
+            f"target {target.name!r} has no OSV package/ecosystem configured"
+        )
+    cache_path = paths.data / "raw" / "osv" / f"{target.name}.json"
     if offline:
         source_path = raw_path or cache_path
         records = load_snapshot(source_path)
         source = f"cache:{source_path}"
     else:
-        response = fetch_osv()
-        save_snapshot(cache_path, response)
+        response = fetch_osv(osv_package)
+        save_snapshot(cache_path, response, package=osv_package)
         records = response.get("vulns", [])
-        source = "osv"
+        source = f"osv:{target.name}"
 
-    normalized = normalize_osv(records)
+    normalized = normalize_osv(records, package=osv_package)
     if not normalized:
         raise IngestError(
-            "OSV returned no CVE-bearing Hex/bandit advisories; "
-            "the current data may be synthetic or the upstream schema changed"
+            f"OSV returned no CVE-bearing {target.ecosystem}/{target.package} "
+            "advisories; the current data may be synthetic or the upstream "
+            "schema changed"
         )
 
     catalog_path = paths.data / "advisories.json"
@@ -49,9 +66,27 @@ def ingest_bandit(
 
     return {
         "source": source,
+        "target": target.name,
         "normalized": len(normalized),
         "proposed": str(proposed_path),
         "diff": str(diff_path),
         "changes": changes,
         "applied": applied,
     }
+
+
+def ingest_bandit(
+    paths: Paths,
+    *,
+    offline: bool = False,
+    apply: bool = False,
+    raw_path: Path | None = None,
+) -> dict[str, Any]:
+    """Backward-compatible wrapper for the original Bandit-only command."""
+    return ingest_target(
+        paths,
+        BANDIT_INTELLIGENCE,
+        offline=offline,
+        apply=apply,
+        raw_path=raw_path,
+    )

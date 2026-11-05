@@ -13,6 +13,7 @@ from ..lab import LabRuntime, docker
 from ..models import Package
 from ..paths import Paths
 from ..probe import ProbeResult, ProbeTarget, load_probe
+from ..targets.loader import load_adapter
 from .stats import json_safe_number, summarize
 
 ROLES = ("vulnerable", "patched")
@@ -310,6 +311,8 @@ def run_validation(
     if probe is None:
         probe = load_probe(package.root, probe_manifest)
 
+    adapter = load_adapter(cfg, manifest.adapter_name)
+    measurement = adapter.measurement()
     run_count = int(runs or probe_manifest.runs or 1)
     thresholds = dict(probe_manifest.thresholds)
     metric_name = probe_manifest.metric
@@ -326,7 +329,7 @@ def run_validation(
                 f"runtime {role} target is {service.name!r}, probe manifest "
                 f"expects {expected!r}"
             )
-        targets[role] = ProbeTarget.from_service(service)
+        targets[role] = ProbeTarget.from_service(service, measurement=measurement)
 
     evidence_dir = package.root / manifest.paths.get("evidence", "evidence")
     runs_dir = evidence_dir / "runs"
@@ -482,7 +485,7 @@ def run_validation(
         ],
         "verdict": decision["verdict"],
         "environment": {
-            "target": manifest.target,
+            "target": manifest.adapter_name,
             "lab_id": runtime.lab_id,
             "runtime": str(runtime_path),
             "vulnerable_version": runtime.services["vulnerable"].version,

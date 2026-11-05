@@ -84,6 +84,7 @@ Runtime notes: [`reports/lab-runtime-fixes.md`](reports/lab-runtime-fixes.md).
 | Document | Purpose |
 |---|---|
 | [`usage.md`](usage.md) | Full CLI, lab, validation, troubleshooting |
+| [`docs/package-lifecycle.md`](docs/package-lifecycle.md) | Lifecycle diagram, package invariants, add-a-CVE/adapter checklist |
 | [`docs/vulnforge-architecture.md`](docs/vulnforge-architecture.md) | Architecture, contracts, roadmap, known gaps |
 | [`docs/package-authoring.md`](docs/package-authoring.md) | Add a vulnerability package |
 | [`docs/adapter-authoring.md`](docs/adapter-authoring.md) | Add a target adapter |
@@ -94,9 +95,12 @@ Runtime notes: [`reports/lab-runtime-fixes.md`](reports/lab-runtime-fixes.md).
 ## Extending
 
 Pick the next item from `reports/technical-report.md`, add its score in
-`data/prioritization.json`, copy the closest package probe, and run
+`data/prioritization.json`, scaffold it with
+`vulnforge package scaffold <CVE>`, implement the generated probe, and run
 `vulnforge analyze`, `vulnforge validate`, `vulnforge detect`, and
-`vulnforge report`. See [`docs/package-authoring.md`](docs/package-authoring.md).
+`vulnforge report`. The exact file checklist, lifecycle, invariants, and
+copy-vs-change table are in
+[`docs/package-lifecycle.md`](docs/package-lifecycle.md).
 
 ## Development
 

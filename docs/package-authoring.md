@@ -2,6 +2,12 @@
 
 A package is one self-contained CVE directory under `vulnerabilities/`.
 
+For the end-to-end lifecycle, the current required/generated file split, and a
+worked example, see [`package-lifecycle.md`](package-lifecycle.md). In
+particular, the Bandit adapter also needs
+`lab/app/locks/mix-<version>.lock` for both pinned versions, and a probe must
+emit the observation keys the offline detector consumes.
+
 ## Layout
 
 ```text
@@ -14,7 +20,7 @@ vulnerabilities/CVE-XXXX-XXXXX/
 │   └── attack-surface.md
 ├── lab/
 │   ├── lab.json
-│   ├── compose.yaml
+│   ├── compose.yaml        # optional manual fallback; generated at runtime
 │   └── provenance.json
 ├── poc/
 │   ├── manifest.json
@@ -37,7 +43,7 @@ vulnerabilities/CVE-XXXX-XXXXX/
 
 `package.json` pins:
 
-- target adapter name
+- adapter name (`adapter`; `target` is a legacy alias)
 - vulnerable, patched, and first-fixed versions
 - artifact paths
 - validation status/verdict
@@ -61,6 +67,7 @@ thresholds.
 ## Validate
 
 ```bash
+vulnforge package scaffold <CVE>
 vulnforge package validate <CVE>
 vulnforge lab start <CVE>
 vulnforge validate <CVE> --runs 3

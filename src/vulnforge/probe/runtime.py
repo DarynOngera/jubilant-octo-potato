@@ -92,20 +92,15 @@ class MemorySampler:
     def _sample_once(self) -> None:
         try:
             stats = self.target.admin_stats()
-            total = stats.get("erlang_memory", {}).get("total")
-            top_processes = stats.get("top_processes") or []
-            top_memory = max(
-                (int(process.get("memory", 0)) for process in top_processes),
-                default=0,
-            )
-            if isinstance(total, int):
+            sample = self.target.measurement.reader(stats)
+            if sample is not None:
                 self.samples.append(
                     {
                         "t": round(time.monotonic() - self._t0, 6),
-                        "total": total,
-                        "process_count": stats.get("process_count"),
-                        "top_process_memory": top_memory,
-                        "run_queue": stats.get("run_queue"),
+                        "total": sample.total,
+                        "process_count": sample.process_count,
+                        "top_process_memory": sample.top_process_memory,
+                        "run_queue": sample.run_queue,
                     }
                 )
         except Exception:
@@ -136,10 +131,16 @@ class MemorySampler:
         return max((int(sample["total"]) for sample in self.samples), default=None)
 
 
+def _sample_total(target: ProbeTarget) -> int:
+    stats = target.admin_stats()
+    sample = target.measurement.reader(stats)
+    return sample.total if sample is not None else 0
+
+
 def capture_benign_pool(
     target: ProbeTarget,
     count: int = 8,
-    path: str = "/healthz",
+    path: str | None = None,
 ) -> list[dict[str, Any]]:
     """Capture a small normal-connection pool for the memory-outlier rule.
 
@@ -148,10 +149,10 @@ def capture_benign_pool(
     recorded in probe observations for offline detection.
     """
     pool: list[dict[str, Any]] = []
-    url = f"{target.base_url.rstrip('/')}{path}"
+    health_path = path if path is not None else target.measurement.health_path
+    url = f"{target.base_url.rstrip('/')}{health_path}"
     for index in range(count):
-        before_stats = target.admin_stats()
-        before = before_stats.get("erlang_memory", {}).get("total", 0)
+        before = _sample_total(target)
         started = time.monotonic()
         error = None
         try:
@@ -160,8 +161,7 @@ def capture_benign_pool(
         except (urllib.error.URLError, ConnectionError, TimeoutError) as exc:
             error = str(exc)
         elapsed = time.monotonic() - started
-        after_stats = target.admin_stats()
-        after = after_stats.get("erlang_memory", {}).get("total", 0)
+        after = _sample_total(target)
         pool.append(
             {
                 "conn_id": f"benign-{index + 1}",

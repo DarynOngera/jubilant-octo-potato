@@ -49,7 +49,8 @@ exploit scripts.
 
 ```text
 src/vulnforge/
-  cli.py            # argparse entrypoint
+  cli.py            # compatibility entrypoint
+  commands/         # argparse parser + package/lab/validate/detect/report/intel/admin commands
   config.py         # config/vulnforge.yaml
   paths.py          # workspace discovery
   models.py         # dataclasses for packages/artifacts
@@ -98,48 +99,80 @@ tests/              # factory tests and golden baselines
 
 ## 4. Core contracts
 
+The end-to-end lifecycle, package invariants, and the add-a-CVE/add-an-adapter
+checklists are maintained in
+[`docs/package-lifecycle.md`](package-lifecycle.md). This section describes the
+current code contracts; use the lifecycle page for the operational contract.
+
 ### TargetAdapter
+
+The normative protocol is [`src/vulnforge/targets/base.py`](../src/vulnforge/targets/base.py).
+It currently defines:
 
 ```python
 class TargetAdapter(Protocol):
     name: str
-    def plan_versions(self, advisory: Advisory) -> VersionPlan: ...
-    def build(self, spec: LabSpec, role: str) -> ImageRef: ...
-    def start(self, spec: LabSpec) -> LabRuntime: ...
-    def stop(self, lab: LabRuntime) -> None: ...
-    def health(self, target: Target) -> Health: ...
-    def stats(self, target: Target) -> dict: ...
+    base_image: str
+    app_dir: Path
+
+    def image_tag(self, cve: str, role: str, version: str) -> str: ...
+    def build_args(self, version: str, cve: str, role: str) -> dict[str, str]: ...
+    def labels(self, cve, role, version, git_commit) -> dict[str, str]: ...
+    def lockfile(self, version: str) -> Path | None: ...
+    def version_from_stats(self, stats: dict) -> str | None: ...
+    def service(self, target, service, limits) -> dict[str, Any]: ...
+    def health(self, target) -> tuple[bool, str]: ...
+    def stats(self, target) -> dict[str, Any] | None: ...
+    def measurement(self) -> MeasurementSpec: ...
+    def intelligence(self) -> IntelligenceSpec: ...
 ```
 
-The core must not import a target adapter directly; adapters are resolved by
-config and loaded lazily.
+`MeasurementSpec` supplies the stats/health/GC paths and a reader that
+normalizes the target's JSON into a target-neutral memory sample. The core
+`MemorySampler` no longer parses BEAM field names directly.
+`IntelligenceSpec` supplies the OSV ecosystem/package and GitHub repository
+used by ingestion and source analysis.
+
+The loader also passes `repo_root`/`app_dir` to the adapter constructor, and
+`provenance.py` uses `adapter.repo_root`; both are currently implicit gaps in
+the Protocol. The core must not import a concrete adapter directly; adapters
+are resolved by config and loaded lazily.
 
 ### Probe
 
+The package probe is a module loaded from `poc/manifest.json:entrypoint` (for
+example `poc.exploit:run`). It implements:
+
 ```python
-class Probe(Protocol):
-    def run(self, target: Target, **kwargs) -> ProbeResult: ...
+def run(target: ProbeTarget, **kwargs) -> ProbeResult: ...
 ```
 
-`ProbeResult` carries metrics, observations, artifacts, timings, sample
-counts, and errors. The M1 bridge adapts existing `run(target, **kwargs) -> dict`
-probes until M3.
+`ProbeResult` carries metrics, observations, artifacts, timings, sample counts,
+and errors. The full lifecycle and the observation keys consumed by the
+offline detector are documented in
+[`package-lifecycle.md`](package-lifecycle.md#probe-observation-contract).
 
-### VersionPlan
+### Version pair
+
+There is no `VersionPlan` dataclass in the current implementation. The pair is
+stored in three places that must agree:
 
 ```json
 {
-  "cve": "CVE-2026-111101",
-  "affected": [{"introduced": "0.1.0", "fixed": "1.14.0"}],
-  "first_fixed": "1.14.0",
-  "vulnerable": {"version": "1.13.1", "reason": "last vulnerable"},
-  "patched": {"version": "1.14.0", "reason": "first fixed"}
+  "versions": {
+    "vulnerable": "1.13.1",
+    "patched": "1.14.0",
+    "first_fixed": "1.14.0",
+    "affected": [{"introduced": "0.1.0", "fixed": "1.14.0"}]
+  }
 }
 ```
 
-Validation rejects a vulnerable version outside the affected ranges, or a
-patched version that is not the first fixed release unless a rationale is
-recorded.
+`package.json` owns `first_fixed`; `lab/lab.json` owns the same
+`vulnerable`/`patched` strings plus the lab target roles. `package validate`
+checks that the package, lab, and probe roles agree and that
+`patched == first_fixed`. It does not currently verify that the vulnerable
+version is inside the advisory's affected range.
 
 ## 5. Validation methodology
 
@@ -154,8 +187,9 @@ recorded.
 - Two verdict modes:
   - **absolute**: vulnerable median >= minimum, patched median <= maximum,
     patched CV <= guard, and non-overlapping run ranges.
-  - **relative**: vulnerable median >= sanity floor and
-    `vulnerable_median / patched_median >= min_ratio`.
+  - **relative**: vulnerable median >= sanity floor,
+    `vulnerable_median / patched_median >= min_ratio`, and
+    patched CV <= guard.
 - `FAIL` when the patched side is still above the maximum (or sanity cap);
   `INCONCLUSIVE` for insufficient samples, high patched CV, overlapping ranges,
   or a relative reduction below the pre-registered threshold; `ERROR` for
@@ -177,18 +211,23 @@ evidence/
   runs/run-NN-role.json   # raw probe result per run/role
   telemetry/run-NN-role.json  # /admin/stats time series
   logs/role.log           # container logs
-  detection.json          # M4
 ```
 
-`execution.json` lists every evidence artifact with a SHA-256 hash; README
-files are documentation and are excluded from the hash manifest. Reports are
-generated from the bundle. Evidence is append-only for a given run; regenerate
-rather than hand-edit.
+`detection/evidence.json` is generated by `vulnforge detect`; it lives outside
+the `evidence/` directory and is not currently included in the execution hash
+manifest.
+
+`execution.json` lists every file under `evidence/` with a SHA-256 hash;
+`execution.json` and README files are excluded from the hash manifest. Reports
+are generated from the bundle. Evidence is append-only for a given run;
+regenerate rather than hand-edit.
 
 ## 7. Detection methodology
 
 - Rules operate on normalized observations, not payload signatures.
-- The initial rules are the four in `tests/detection/thresholds.py`.
+- The rules are implemented in `src/vulnforge/detect/rules.py`; package
+  thresholds are resolved from `detection/spec.json` by
+  `src/vulnforge/detect/runner.py`.
 - M4 feeds probe observations and `/admin/stats` telemetry into the rules and
   records per-rule hits for vulnerable and patched targets.
 - This is offline evidence review first; live Prometheus/proxy integration is
@@ -352,7 +391,7 @@ ingestion, adapter-boundary, and CI gaps. Remaining:
    production target (Plug/Cowboy/Nginx).
 3. Optional OCI registry, SBOM generation, and image signing are deferred.
 4. The static `lab/compose.yaml` fallback duplicates the generated Compose
-   intent; it remains for manual use.
+   intent; it is optional and new packages do not need one.
 5. Evidence/provenance was generated from a dirty worktree. Rebuild and
    revalidate after the M4–M7 commits if a clean `git.dirty: false` record is
    required.
@@ -362,5 +401,7 @@ ingestion, adapter-boundary, and CI gaps. Remaining:
    dry-run/merge and never deletes existing advisories.
 8. Detection is offline evidence review, not a live IDS or Prometheus
    integration.
+9. Ingestion and `analyze` use adapter-provided `IntelligenceSpec` coordinates,
+   but the global `reports/generate_report.py` remains Bandit-specific.
 
 These are future work, not blockers for the current factory.

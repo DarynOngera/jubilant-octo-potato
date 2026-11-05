@@ -5,18 +5,14 @@ import json
 from pathlib import Path
 from typing import Any
 
+from .contract import ANALYSIS_FILES, DETECTION_FILES, missing_artifacts
 from .errors import PackageError
 from .models import Advisory, LabSpec, Package, PackageManifest, ProbeManifest
 from .paths import Paths
 from .schema import validate_instance
 
-REQUIRED_ANALYSIS_FILES = (
-    "root-cause.md",
-    "exploitability.json",
-    "attack-surface.md",
-)
-REQUIRED_DETECTION_FILES = ("spec.json",)
-REQUIRED_EVIDENCE_FILES = ("execution.json",)
+REQUIRED_ANALYSIS_FILES = ANALYSIS_FILES
+REQUIRED_DETECTION_FILES = DETECTION_FILES
 
 
 def _load_json(path: Path, label: str, errors: list[str]) -> dict[str, Any] | None:
@@ -197,9 +193,9 @@ def check_package_consistency(pkg: Package) -> None:
             f"lab cve {pkg.lab.cve!r} does not match package cve "
             f"{manifest.cve!r}"
         ), errors)
-        _check(pkg.lab.target == manifest.target, (
-            f"lab target {pkg.lab.target!r} does not match package target "
-            f"{manifest.target!r}"
+        _check(pkg.lab.adapter_name == manifest.adapter_name, (
+            f"lab adapter {pkg.lab.adapter_name!r} does not match package adapter "
+            f"{manifest.adapter_name!r}"
         ), errors)
         _check(
             pkg.lab.versions.get("vulnerable") == manifest.vulnerable_version,
@@ -270,14 +266,9 @@ def check_package_consistency(pkg: Package) -> None:
     ):
         _check((pkg.root / rel).is_file(), f"referenced file is missing: {rel}", errors)
 
-    lab_rel = manifest.paths.get("lab", "lab/lab.json")
-    lab_compose = (pkg.root / lab_rel).parent / "compose.yaml"
-    _check(lab_compose.is_file(), f"lab compose file is missing: {lab_compose}", errors)
-
     for directory, filenames in (
         (manifest.paths.get("analysis", "analysis"), REQUIRED_ANALYSIS_FILES),
         (manifest.paths.get("detection", "detection"), REQUIRED_DETECTION_FILES),
-        (manifest.paths.get("evidence", "evidence"), REQUIRED_EVIDENCE_FILES),
     ):
         base = pkg.root / directory
         _check(base.is_dir(), f"referenced directory is missing: {directory}", errors)
@@ -311,6 +302,11 @@ def check_package_consistency(pkg: Package) -> None:
         _check((pkg.root / evidence_rel).is_file(), (
             f"validation evidence is missing: {evidence_rel}"
         ), errors)
+
+    for relative in missing_artifacts(pkg.root, manifest.status, manifest.paths):
+        errors.append(
+            f"required artifact for status {manifest.status!r} is missing: {relative}"
+        )
 
 
 def load_packages(paths: Paths) -> list[Package]:

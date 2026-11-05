@@ -78,7 +78,7 @@ def _summarize(pkg: Package, paths: Paths, matrix: dict[str, dict[str, Any]]) ->
     return {
         "cve": pkg.cve,
         "title": pkg.advisory.title if pkg.advisory is not None else "",
-        "target": manifest.target if manifest is not None else "",
+        "target": manifest.adapter_name if manifest is not None else "",
         "status": manifest.status if manifest is not None else "invalid",
         "verdict": manifest.last_verdict if manifest is not None else "NOT_RUN",
         "detection": detection.get("result") or "NOT_RUN",
@@ -235,7 +235,7 @@ def labs(cfg: FactoryConfig, paths: Paths) -> list[dict[str, Any]]:
         try:
             if manifest is None:
                 raise ValueError("package has no manifest")
-            adapter = load_adapter(cfg, manifest.target)
+            adapter = load_adapter(cfg, manifest.adapter_name)
             orchestrator = LabOrchestrator(cfg, paths, adapter)
             status = orchestrator.status(pkg)
             item.update(status)

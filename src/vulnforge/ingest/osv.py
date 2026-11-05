@@ -12,15 +12,18 @@ from typing import Any
 from ..errors import VulnForgeError
 
 OSV_QUERY_URL = "https://api.osv.dev/v1/query"
-OSV_PACKAGE = {"name": "bandit", "ecosystem": "Hex"}
+DEFAULT_OSV_PACKAGE = {"name": "bandit", "ecosystem": "Hex"}
+OSV_PACKAGE = DEFAULT_OSV_PACKAGE
 
 
 class IngestError(VulnForgeError):
     pass
 
 
-def fetch_osv(timeout: int = 30) -> dict[str, Any]:
-    payload = json.dumps({"package": OSV_PACKAGE}).encode()
+def fetch_osv(
+    package: dict[str, str] | None = None, timeout: int = 30
+) -> dict[str, Any]:
+    payload = json.dumps({"package": package or DEFAULT_OSV_PACKAGE}).encode()
     request = urllib.request.Request(
         OSV_QUERY_URL,
         data=payload,
@@ -34,13 +37,18 @@ def fetch_osv(timeout: int = 30) -> dict[str, Any]:
         raise IngestError(f"OSV query failed: {exc}") from exc
 
 
-def save_snapshot(path: Path, response: dict[str, Any], source: str = OSV_QUERY_URL) -> Path:
+def save_snapshot(
+    path: Path,
+    response: dict[str, Any],
+    source: str = OSV_QUERY_URL,
+    package: dict[str, str] | None = None,
+) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     canonical = json.dumps(response, sort_keys=True).encode()
     snapshot = {
         "retrieved_at": datetime.now(timezone.utc).isoformat(),
         "source": source,
-        "package": OSV_PACKAGE,
+        "package": package or DEFAULT_OSV_PACKAGE,
         "response_sha256": hashlib.sha256(canonical).hexdigest(),
         "response": response,
     }
@@ -89,18 +97,24 @@ def _range_string(event_range: dict[str, Any]) -> str | None:
     return None
 
 
-def normalize_osv_record(record: dict[str, Any]) -> dict[str, Any] | None:
+def normalize_osv_record(
+    record: dict[str, Any], package: dict[str, str] | None = None
+) -> dict[str, Any] | None:
     cve = _first_alias(record, "CVE-")
     if cve is None:
         return None
     ghsa = _first_alias(record, "GHSA-")
+    expected = package or DEFAULT_OSV_PACKAGE
     ranges: list[str] = []
     fixed_versions: list[str] = []
     for affected in record.get("affected", []):
         if not isinstance(affected, dict):
             continue
-        package = affected.get("package", {})
-        if package.get("ecosystem") != "Hex" or package.get("name") != "bandit":
+        affected_package = affected.get("package", {})
+        if (
+            affected_package.get("ecosystem") != expected.get("ecosystem")
+            or affected_package.get("name") != expected.get("name")
+        ):
             continue
         for event_range in affected.get("ranges", []):
             if not isinstance(event_range, dict):
@@ -164,10 +178,12 @@ def normalize_osv_record(record: dict[str, Any]) -> dict[str, Any] | None:
     }
 
 
-def normalize_osv(records: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def normalize_osv(
+    records: list[dict[str, Any]], package: dict[str, str] | None = None
+) -> list[dict[str, Any]]:
     normalized = []
     for record in records:
-        item = normalize_osv_record(record)
+        item = normalize_osv_record(record, package=package)
         if item is not None:
             normalized.append(item)
     return sorted(normalized, key=lambda item: item["cve"])

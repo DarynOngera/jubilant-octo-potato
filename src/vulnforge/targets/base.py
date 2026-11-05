@@ -2,14 +2,17 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any, Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 
-from ..lab.models import ServicePlan
-from ..models import LabTarget
+if TYPE_CHECKING:
+    from ..lab.models import ServicePlan
+    from ..models import LabTarget
+    from ..probe.measurement import MeasurementSpec
+    from .intelligence import IntelligenceSpec
 
 
 class TargetAdapter(Protocol):
-    """Target-specific image/lab/health behavior.
+    """Target-specific image/lab/health/measurement behavior.
 
     The factory core must not import a concrete adapter. Adapters are resolved
     from ``config/vulnforge.yaml`` at runtime.
@@ -18,6 +21,9 @@ class TargetAdapter(Protocol):
     name: str
     base_image: str
     app_dir: Path
+    repo_root: Path
+
+    def __init__(self, repo_root: Path, app_dir: Path | None = None) -> None: ...
 
     def image_tag(self, cve: str, role: str, version: str) -> str: ...
 
@@ -45,3 +51,11 @@ class TargetAdapter(Protocol):
     def health(self, target: LabTarget) -> tuple[bool, str]: ...
 
     def stats(self, target: LabTarget) -> dict[str, Any] | None: ...
+
+    def measurement(self) -> MeasurementSpec:
+        """Return stats/GC paths and the reader that normalizes stats."""
+        ...
+
+    def intelligence(self) -> IntelligenceSpec:
+        """Return the target's OSV/GitHub intelligence coordinates."""
+        ...

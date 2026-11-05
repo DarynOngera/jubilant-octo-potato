@@ -67,7 +67,7 @@ def render_package_report(package: Package) -> str:
     lines: list[str] = []
     lines.append(f"# {package.cve} — Technical Report\n")
     lines.append(f"**Status:** `{manifest.status}`")
-    lines.append(f"**Target:** {manifest.target}")
+    lines.append(f"**Adapter:** {manifest.adapter_name}")
     lines.append(
         f"**Vulnerable:** `{manifest.vulnerable_version}` | "
         f"**Patched:** `{manifest.patched_version}` | "

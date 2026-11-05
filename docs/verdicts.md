@@ -42,6 +42,7 @@ Confirmed when:
 - vulnerable median >= the sanity floor
 - `vulnerable_median / patched_median >= min_ratio`
 - patched median is below the sanity cap
+- patched CV <= `max_cv` (the same guard used in absolute mode)
 
 ## Outcomes
 

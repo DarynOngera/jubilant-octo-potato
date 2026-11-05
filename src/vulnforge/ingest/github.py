@@ -14,17 +14,24 @@ from ..errors import VulnForgeError
 from ..models import Package
 from .osv import IngestError
 
+DEFAULT_GITHUB_REPO = "mtrudel/bandit"
 GITHUB_PATCH = "https://github.com/mtrudel/bandit/commit/{sha}.patch"
+GITHUB_PATCH_TEMPLATE = "https://github.com/{repo}/commit/{sha}.patch"
 
 
-def fetch_patch(commit: str, cache_dir: Path, refresh: bool = False) -> Path:
+def fetch_patch(
+    commit: str,
+    cache_dir: Path,
+    refresh: bool = False,
+    repo: str = DEFAULT_GITHUB_REPO,
+) -> Path:
     cache_dir.mkdir(parents=True, exist_ok=True)
     patch_path = cache_dir / f"{commit}.patch"
     meta_path = cache_dir / f"{commit}.json"
     if patch_path.is_file() and meta_path.is_file() and not refresh:
         return patch_path
 
-    url = GITHUB_PATCH.format(sha=commit)
+    url = GITHUB_PATCH_TEMPLATE.format(repo=repo, sha=commit)
     try:
         with urllib.request.urlopen(url, timeout=30) as response:
             content = response.read()
@@ -55,17 +62,20 @@ def changed_files(patch_text: str) -> list[str]:
     return sorted(set(files))
 
 
-def analyze_package(package: Package, refresh: bool = False) -> dict[str, Any]:
+def analyze_package(
+    package: Package, refresh: bool = False, repo: str | None = None
+) -> dict[str, Any]:
     if package.advisory is None:
         raise VulnForgeError(f"{package.cve} has no advisory")
     commits = list(package.advisory.commits or [])
+    repo = repo or DEFAULT_GITHUB_REPO
     commits_dir = package.root / "analysis" / "commits"
     captured = []
     errors = []
     all_files: set[str] = set()
     for commit in commits:
         try:
-            patch_path = fetch_patch(commit, commits_dir, refresh=refresh)
+            patch_path = fetch_patch(commit, commits_dir, refresh=refresh, repo=repo)
             files = changed_files(patch_path.read_text(errors="replace"))
             all_files.update(files)
             captured.append({"commit": commit, "patch": str(patch_path), "files": files})

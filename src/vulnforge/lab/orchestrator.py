@@ -64,7 +64,7 @@ class LabOrchestrator:
         runtime_dir = self._runtime_dir(package.cve)
         return LabPlan(
             cve=package.cve,
-            target=manifest.target,
+            target=manifest.adapter_name,
             lab_id=f"vulnforge-{package.cve.lower()}",
             network="labnet",
             compose_path=runtime_dir / "compose.yaml",

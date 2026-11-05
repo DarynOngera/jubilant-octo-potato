@@ -88,7 +88,7 @@ multi-run workflow.
 | `probes/common.py` | Target guardrails, budgets, in-flight memory sampler |
 | `probes/registry.py` | Legacy single-run registry (historical; package manifests are M3 source of truth) |
 | `tests/regression/compare_versions.py` | Runs each PoC against its A/B pair |
-| `tests/detection/thresholds.py` | Four behavioral detection rules + self-test |
+| `src/vulnforge/detect/rules.py` | Four behavioral detection rules; `tests/detection/thresholds.py` is the synthetic self-test |
 | `tests/test_version_resolver.py` | 18 range/parser/checkpoint unit tests |
 | `tests/test_package_model.py` etc. | Package, CLI, schema, lab-plan, and golden tests |
 | `lab/app/` | Version-parameterized Plug/Bandit target image |
@@ -111,6 +111,9 @@ Generated artifacts should not be hand-edited; re-run the generator.
 The factory package is installed editable with `pip install -e '.[dev]'`.
 It is also runnable as `python -m vulnforge`.
 
+For the full order of operations and the files each stage creates, see
+[`docs/package-lifecycle.md`](docs/package-lifecycle.md).
+
 ```bash
 # Environment and packages
 vulnforge doctor
@@ -119,6 +122,7 @@ vulnforge status --json
 vulnforge package list
 vulnforge package show CVE-2026-116078
 vulnforge package validate
+vulnforge package scaffold CVE-2026-39803
 
 # Lab lifecycle: dynamic loopback ports + provenance
 vulnforge lab build CVE-2026-116078
@@ -315,7 +319,7 @@ Typical full regeneration:
 ## 2. Tests and detection self-test
 
 ```bash
-# All Python unit tests (120 currently; 2 Docker integration tests skipped by default)
+# All Python unit tests (131 currently; 2 Docker integration tests skipped by default)
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 
 # Lint
@@ -399,9 +403,10 @@ The orchestrator:
   revision.
 
 `vulnforge lab status --json` prints the dynamic app/admin URLs and per-target
-health/version state. The existing `config/research.yaml` targets still point at
-the fixed-port repository lab (4100/4110/4120); probe-to-runtime wiring lands in
-M3.
+health/version state. Package probes read the dynamic URLs from
+`.vulnforge/labs/<CVE>/runtime.json`; `config/research.yaml` remains only for
+the legacy fixed-port scripts under `probes/` and
+`tests/regression/compare_versions.py`.
 
 ### Lab constraints you must not remove
 
