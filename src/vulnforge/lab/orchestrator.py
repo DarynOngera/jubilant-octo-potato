@@ -1,6 +1,7 @@
 """Lab lifecycle orchestration for a vulnerability package."""
 from __future__ import annotations
 
+import dataclasses
 import json
 import time
 from datetime import datetime, timezone
@@ -87,6 +88,52 @@ class LabOrchestrator:
             admin_url=service.admin_url,
         )
 
+    @staticmethod
+    def _published_port(
+        inspect: dict[str, Any] | None,
+        container_port: int | None,
+        fallback: int,
+    ) -> int:
+        if inspect is None or container_port is None:
+            return fallback
+        ports = (inspect.get("NetworkSettings") or {}).get("Ports") or {}
+        bindings = ports.get(f"{container_port}/tcp") or []
+        for binding in bindings:
+            if not isinstance(binding, dict):
+                continue
+            host_port = binding.get("HostPort")
+            if host_port:
+                return int(host_port)
+        return fallback
+
+    def _service_from_inspect(
+        self,
+        service: ServicePlan,
+        inspect: dict[str, Any] | None,
+    ) -> ServicePlan:
+        app_container, admin_container = self.adapter.container_ports()
+        app_port = self._published_port(inspect, app_container, service.app_port)
+        if admin_container is None:
+            admin_port = app_port
+        else:
+            admin_port = self._published_port(
+                inspect, admin_container, service.admin_port
+            )
+        return dataclasses.replace(
+            service,
+            app_port=app_port,
+            admin_port=admin_port,
+            base_url=f"http://127.0.0.1:{app_port}",
+            admin_url=f"http://127.0.0.1:{admin_port}",
+        )
+
+    def _published_services(self, plan: LabPlan) -> dict[str, ServicePlan]:
+        services: dict[str, ServicePlan] = {}
+        for role, service in plan.services.items():
+            inspect = docker.container_inspect(service.container_name)
+            services[role] = self._service_from_inspect(service, inspect)
+        return services
+
     def render_compose(self, package: Package, plan: LabPlan) -> Path:
         assert package.lab is not None
         services: dict[str, Any] = {}
@@ -131,6 +178,7 @@ class LabOrchestrator:
         plan = self.plan(package)
         compose_path = self.render_compose(package, plan)
         docker.compose(compose_path, "up", "-d", "--remove-orphans", "--build")
+        plan = dataclasses.replace(plan, services=self._published_services(plan))
         self._wait_for_health(package, plan, timeout=90)
 
         runtime = LabRuntime(
@@ -215,6 +263,7 @@ class LabOrchestrator:
         services: dict[str, Any] = {}
         for role, service in runtime.services.items():
             inspect = docker.container_inspect(service.container_name)
+            service = self._service_from_inspect(service, inspect)
             running = bool(inspect and inspect.get("State", {}).get("Running"))
             target = self._lab_target(package, service)
             healthy, health_detail = self.adapter.health(target)
@@ -225,6 +274,11 @@ class LabOrchestrator:
                 "container_name": service.container_name,
                 "base_url": service.base_url,
                 "admin_url": service.admin_url,
+                "app_port": service.app_port,
+                "admin_port": service.admin_port,
+                "image": service.image_tag,
+                "image_id": (inspect or {}).get("Image"),
+                "started_at": ((inspect or {}).get("State") or {}).get("StartedAt"),
                 "running": running,
                 "healthy": healthy,
                 "health_detail": health_detail,

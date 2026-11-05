@@ -120,6 +120,9 @@ class BanditAdapter:
         # The Bandit lab app exposes BEAM memory, process, and /gc endpoints.
         return MeasurementSpec()
 
+    def container_ports(self) -> tuple[int, int | None]:
+        return (4000, 4001)
+
     def intelligence(self) -> IntelligenceSpec:
         return IntelligenceSpec(
             name=self.name,

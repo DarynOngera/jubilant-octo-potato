@@ -70,6 +70,7 @@ small { color: var(--muted); }
 .mode { text-transform: uppercase; letter-spacing: .08em; font-size: .68rem; }
 .mode.live { color: var(--ok); }
 .mode.readonly { color: var(--warn); }
+.build-info { font-family: var(--mono); font-size: .68rem; color: var(--muted); }
 .root-path { font-family: var(--mono); font-size: .68rem; overflow-wrap: anywhere; }
 .docs-link { color: var(--muted); }
 
@@ -135,6 +136,34 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
 .btn.small { padding: 5px 9px; font-size: .78rem; }
 .btn:disabled { opacity: .42; cursor: not-allowed; }
 .actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.workflow-strip {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 12px 16px; margin-bottom: 18px; color: var(--muted); font-size: .8rem;
+}
+.workflow-strip b {
+  display: inline-grid; place-items: center; width: 20px; height: 20px;
+  border-radius: 50%; background: var(--panel-2); color: var(--accent); margin-right: 4px;
+}
+.workflow-arrow { color: var(--line); }
+.lifecycle-rail { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.lifecycle-step {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 8px; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--muted); font-size: .72rem; text-transform: capitalize;
+}
+.lifecycle-step.done { color: var(--ok); border-color: rgba(61, 220, 151, .3); }
+.lifecycle-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+.lifecycle-step.done .lifecycle-dot { background: var(--ok); }
+.next-action-row { margin-bottom: 10px; }
+.next-step { display: inline-flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.next-step.complete { color: var(--ok); font-weight: 600; }
+.action-groups { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: flex-start; }
+.action-group { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.action-group > span:first-child {
+  color: var(--muted); font-size: .68rem; text-transform: uppercase; letter-spacing: .08em;
+  margin-right: 2px;
+}
 
 .chip-row { display: flex; flex-wrap: wrap; gap: 6px; }
 .kv { display: grid; grid-template-columns: 170px 1fr; gap: 8px 14px; font-size: .88rem; }

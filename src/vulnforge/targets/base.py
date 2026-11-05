@@ -59,3 +59,7 @@ class TargetAdapter(Protocol):
     def intelligence(self) -> IntelligenceSpec:
         """Return the target's OSV/GitHub intelligence coordinates."""
         ...
+
+    def container_ports(self) -> tuple[int, int | None]:
+        """Return (app container port, admin container port or None)."""
+        ...

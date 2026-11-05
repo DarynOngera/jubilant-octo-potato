@@ -57,6 +57,115 @@ def _package_paths(pkg: Package) -> dict[str, Path]:
     }
 
 
+def _probe_ready(pkg: Package) -> bool:
+    if pkg.probe is None:
+        return False
+    path = pkg.probe.module_path(pkg.root)
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        return False
+    # Scaffolded probes deliberately raise this marker until implemented.
+    return "NotImplementedError" not in text
+
+
+def _lifecycle(
+    pkg: Package,
+    paths: Paths,
+    located: dict[str, Path],
+    errors: list[str],
+) -> dict[str, Any]:
+    manifest = pkg.manifest
+    runtime = paths.root / ".vulnforge" / "labs" / pkg.cve / "runtime.json"
+    package_ok = manifest is not None and not errors
+    lab_ok = runtime.is_file()
+    probe_ok = _probe_ready(pkg)
+    validation_ok = (located["evidence"] / "validation.json").is_file()
+    detection_ok = validation_ok and (located["detection"] / "evidence.json").is_file()
+    report_ok = validation_ok and located["report"].is_file()
+
+    stages = {
+        "package": {
+            "ok": package_ok,
+            "label": "package valid" if package_ok else "fix package errors",
+        },
+        "lab": {
+            "ok": lab_ok,
+            "label": "lab runtime present" if lab_ok else "start the lab",
+        },
+        "probe": {
+            "ok": probe_ok,
+            "label": "probe implemented" if probe_ok else "implement the probe",
+        },
+        "validation": {
+            "ok": validation_ok,
+            "label": "validation evidence" if validation_ok else "run validation",
+        },
+        "detection": {
+            "ok": detection_ok,
+            "label": "detection evidence" if detection_ok else "run detection",
+        },
+        "report": {
+            "ok": report_ok,
+            "label": "report generated" if report_ok else "generate the report",
+        },
+    }
+
+    readiness: dict[str, dict[str, Any]] = {
+        "package_validate": {"enabled": True, "reason": "Package validation is always available."},
+        "lab_build": {
+            "enabled": package_ok,
+            "reason": "Fix package validation errors before building.",
+        },
+        "lab_start": {
+            "enabled": package_ok,
+            "reason": "Fix package validation errors before starting the lab.",
+        },
+        "lab_stop": {
+            "enabled": lab_ok,
+            "reason": "No lab runtime is recorded for this package.",
+        },
+        "poc_run": {
+            "enabled": lab_ok and probe_ok,
+            "reason": "Start the lab and implement the probe first.",
+        },
+        "validate": {
+            "enabled": lab_ok and probe_ok,
+            "reason": "Start the lab and implement the probe first.",
+        },
+        "detect": {
+            "enabled": validation_ok,
+            "reason": "Run validation before detection.",
+        },
+        "report": {
+            "enabled": validation_ok,
+            "reason": "Run validation before generating the report.",
+        },
+    }
+
+    if not package_ok:
+        next_action, next_label = "package_validate", "Fix package errors"
+    elif not lab_ok:
+        next_action, next_label = "lab_start", "Start lab"
+    elif not probe_ok:
+        next_action, next_label = None, "Implement the probe"
+    elif not validation_ok:
+        next_action, next_label = "validate", "Run validation"
+    elif not detection_ok:
+        next_action, next_label = "detect", "Run detection"
+    elif not report_ok:
+        next_action, next_label = "report", "Generate report"
+    else:
+        next_action, next_label = None, "Lifecycle complete"
+
+    return {
+        "stages": stages,
+        "next_action": next_action,
+        "next_label": next_label,
+        "actions": readiness,
+    }
+
+
 def _summarize(pkg: Package, paths: Paths, matrix: dict[str, dict[str, Any]]) -> dict[str, Any]:
     manifest = pkg.manifest
     located = _package_paths(pkg)
@@ -64,6 +173,7 @@ def _summarize(pkg: Package, paths: Paths, matrix: dict[str, dict[str, Any]]) ->
     detection = _read_json(located["detection"] / "evidence.json") or {}
     provenance = _read_json(located["lab"].parent / "provenance.json") or {}
     errors = validate_package(pkg, paths) if manifest is not None else list(pkg.errors)
+    lifecycle = _lifecycle(pkg, paths, located, errors)
     row = matrix.get(pkg.cve, {})
     build = provenance.get("build") or {}
     git = build.get("git") or {}
@@ -101,6 +211,7 @@ def _summarize(pkg: Package, paths: Paths, matrix: dict[str, dict[str, Any]]) ->
         "git_commit": git.get("commit"),
         "has_report": located["report"].is_file(),
         "run_count": len(run_files),
+        "lifecycle": lifecycle,
     }
 
 
@@ -160,6 +271,16 @@ def portfolio(cfg: FactoryConfig, paths: Paths) -> dict[str, Any]:
             "inconclusive": verdicts.get("INCONCLUSIVE", 0),
             "triggered": detections.get("TRIGGERED", 0),
             "advisories": len(advisories) if isinstance(advisories, list) else 0,
+            "needs_action": sum(
+                1
+                for item in summaries
+                if item["lifecycle"]["next_label"] != "Lifecycle complete"
+            ),
+            "complete": sum(
+                1
+                for item in summaries
+                if item["lifecycle"]["next_label"] == "Lifecycle complete"
+            ),
         },
         "verdicts": verdicts,
         "detections": detections,
@@ -219,6 +340,9 @@ def labs(cfg: FactoryConfig, paths: Paths) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for pkg in packages:
         runtime_path = paths.root / ".vulnforge" / "labs" / pkg.cve / "runtime.json"
+        provenance_path = pkg.root / "lab" / "provenance.json"
+        provenance = _read_json(provenance_path) or {}
+        build = provenance.get("build") or {}
         item: dict[str, Any] = {
             "cve": pkg.cve,
             "configured": runtime_path.is_file(),
@@ -227,6 +351,12 @@ def labs(cfg: FactoryConfig, paths: Paths) -> list[dict[str, Any]]:
             "created_at": None,
             "services": {},
             "error": None,
+            "build": {
+                "git": build.get("git") or {},
+                "generated_at": provenance.get("generated_at"),
+                "base_image": build.get("base_image"),
+                "images": provenance.get("images") or {},
+            },
         }
         if not runtime_path.is_file():
             results.append(item)
