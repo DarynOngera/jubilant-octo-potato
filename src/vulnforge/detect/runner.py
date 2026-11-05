@@ -6,9 +6,48 @@ from typing import Any
 
 from ..errors import LabError
 from ..models import Package
-from .rules import ConnectionSample, ProcessGrowthSample, evaluate
+from .rules import DEFAULTS, ConnectionSample, ProcessGrowthSample, evaluate
 
 ROLES = ("vulnerable", "patched")
+
+# Spec threshold names -> rule config names. Both frame and chunk spellings are
+# accepted because the packages describe HTTP/2 frames and HTTP/1 chunks.
+SPEC_THRESHOLD_KEYS: dict[str, dict[str, str]] = {
+    "per_connection_frame_rate": {
+        "frames_per_second_min": "max_frame_rate_per_sec",
+        "chunks_per_second_min": "max_frame_rate_per_sec",
+        "avg_frame_bytes_max": "min_bytes_per_frame_ok",
+        "avg_chunk_bytes_max": "min_bytes_per_frame_ok",
+    },
+    "memory_per_connection_outlier": {
+        "stdevs": "memory_outlier_stdevs",
+        "min_attack_bytes": "memory_outlier_floor_bytes",
+    },
+    "body_duration_vs_size": {
+        "seconds_per_kb_max": "max_body_duration_per_kb_s",
+    },
+    "unbounded_process_growth": {
+        "min_process_growth": "min_process_growth",
+        "min_idle_growth_bytes": "min_idle_growth_bytes",
+        "min_samples": "min_process_growth_samples",
+    },
+}
+
+
+def _config_from_spec(spec: dict[str, Any]) -> dict[str, Any]:
+    """Resolve rule thresholds from a detection spec over DEFAULTS."""
+    cfg = dict(DEFAULTS)
+    for rule in spec.get("rules", []):
+        if not isinstance(rule, dict):
+            continue
+        mapping = SPEC_THRESHOLD_KEYS.get(rule.get("id"))
+        thresholds = rule.get("threshold")
+        if not mapping or not isinstance(thresholds, dict):
+            continue
+        for spec_key, cfg_key in mapping.items():
+            if spec_key in thresholds:
+                cfg[cfg_key] = thresholds[spec_key]
+    return cfg
 
 
 def _load_runs(package: Package) -> list[dict[str, Any]]:
@@ -114,13 +153,15 @@ def _history(record: dict[str, Any]) -> list[ProcessGrowthSample]:
 
 
 def _evaluate_role(
-    records: list[dict[str, Any]], pool: list[ConnectionSample]
+    records: list[dict[str, Any]],
+    pool: list[ConnectionSample],
+    cfg: dict[str, Any],
 ) -> dict[str, Any]:
     per_rule: dict[str, dict[str, Any]] = {}
     for record in records:
         sample = _connection(record)
         history = _history(record)
-        for verdict in evaluate(sample, pool, history):
+        for verdict in evaluate(sample, pool, history, cfg=cfg):
             entry = per_rule.setdefault(
                 verdict.rule, {"triggered": False, "details": []}
             )
@@ -151,9 +192,15 @@ def evaluate_package(package: Package) -> dict[str, Any]:
         pool.append(_control(record))
         pool.extend(_benign(record))
 
+    spec_path = package.root / "detection" / "spec.json"
+    spec: dict[str, Any] = {}
+    if spec_path.is_file():
+        spec = json.loads(spec_path.read_text())
+    cfg = _config_from_spec(spec)
+
     targets = {
         role: _evaluate_role(
-            [record for record in records if record.get("role") == role], pool
+            [record for record in records if record.get("role") == role], pool, cfg
         )
         for role in ROLES
     }
@@ -191,15 +238,11 @@ def evaluate_package(package: Package) -> dict[str, Any]:
         )
 
     # Attach the declared expectations for auditability.
-    spec_path = package.root / "detection" / "spec.json"
-    expected: dict[str, dict[str, str]] = {}
-    if spec_path.is_file():
-        spec = json.loads(spec_path.read_text())
-        expected = {
-            rule["id"]: rule.get("expected", {})
-            for rule in spec.get("rules", [])
-            if isinstance(rule, dict)
-        }
+    expected: dict[str, dict[str, str]] = {
+        rule["id"]: rule.get("expected", {})
+        for rule in spec.get("rules", [])
+        if isinstance(rule, dict)
+    }
     for role, target in targets.items():
         for rule in target["rules"]:
             rule["expected"] = expected.get(rule["id"], {}).get(role, "unknown")

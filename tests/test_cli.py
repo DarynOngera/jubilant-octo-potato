@@ -75,10 +75,8 @@ class CliTests(unittest.TestCase):
         self.assertTrue(all(item["ok"] for item in payload))
         self.assertTrue(all(item["errors"] == [] for item in payload))
 
-    def test_detect_116078(self):
-        code, out, _ = run_cli("detect", CVE)
-        self.assertEqual(code, 0)
-        self.assertIn("TRIGGERED", out)
+    # `detect` is covered read-only in tests/test_detection.py via
+    # evaluate_package(); running the CLI here rewrites tracked evidence files.
 
     def test_triage_check(self):
         code, out, _ = run_cli("triage", "--check")

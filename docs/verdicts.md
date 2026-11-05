@@ -57,7 +57,7 @@ Exit code is `0` only for `CONFIRMED`.
 
 | CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict |
 |---|---|---|---:|---:|---|---|
-| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 5.03 MiB | 0.58 MiB | 3 | CONFIRMED |
+| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 7.79 MiB | 0.63 MiB | 3 | CONFIRMED |
 | CVE-2026-111101 | 1.13.1 -> 1.14.0 | attack memory | 2.66 MiB | 1.67 MiB | 3 | INCONCLUSIVE (1.60x < 2.00x) |
 
 Never lower a threshold after seeing the data. If the metric does not meet the
