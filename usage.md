@@ -70,8 +70,15 @@ multi-run workflow.
 | `src/vulnforge/` | Factory package: CLI, config, models, schemas, package validation |
 | `src/vulnforge/probe/` | Probe protocol, target model, memory sampler, budgets |
 | `src/vulnforge/validate/` | Multi-run statistics, verdict logic, evidence bundling |
+| `src/vulnforge/detect/` | Behavioral rules and offline detection runner |
+| `src/vulnforge/report/` | Per-CVE report generator; global report wrapper |
+| `src/vulnforge/ingest/` | OSV ingestion, proposal/merge, commit analysis |
+| `src/vulnforge/triage/` | Resolver/prioritizer wrapper and package overlay |
+| `src/vulnforge/doctor.py` | Environment checks and runtime cleanup |
 | `vulnerabilities/` | Self-contained research packages, one directory per CVE |
 | `vulnerabilities/<CVE>/evidence/` | M3 validation bundle: runs, telemetry, logs, hashes |
+| `targets/toy/` | Non-Bandit target used to prove the adapter boundary |
+| `.github/workflows/` | CI: unit/schema/validation/report drift/lint + Docker integration |
 | `schemas/` | JSON Schemas for advisory, package, lab, probe, validation, detection, evidence |
 | `docs/` | Architecture and authoring documentation |
 | `triage/version_resolver.py` | Multi-range parser, exposure map, checkpoints |
@@ -98,44 +105,50 @@ Generated artifacts should not be hand-edited; re-run the generator.
 
 ---
 
-## VulnForge factory CLI (M1/M2/M3)
+## VulnForge factory CLI (M1–M7)
 
 The factory package is installed editable with `pip install -e '.[dev]'`.
 It is also runnable as `python -m vulnforge`.
 
 ```bash
-# High-level package status
+# Environment and packages
+vulnforge doctor
 vulnforge status
 vulnforge status --json
-
-# Package inspection
 vulnforge package list
 vulnforge package show CVE-2026-116078
-vulnforge package show CVE-2026-116078 --json
-
-# Schema + cross-file validation (all packages, or one)
 vulnforge package validate
-vulnforge package validate CVE-2026-116078
-vulnforge package validate --all --json
 
-# Lab lifecycle (M2): dynamic loopback ports + provenance
+# Lab lifecycle: dynamic loopback ports + provenance
 vulnforge lab build CVE-2026-116078
 vulnforge lab start CVE-2026-116078
-vulnforge lab status CVE-2026-116078
 vulnforge lab status CVE-2026-116078 --json
 vulnforge lab stop CVE-2026-116078
 
-# Probe and multi-run validation (M3)
+# Probe, validation, detection, report
 vulnforge poc run CVE-2026-116078
-vulnforge poc run CVE-2026-116078 --role patched --json
 vulnforge validate CVE-2026-116078 --runs 3
-vulnforge validate CVE-2026-116078 --runs 3 --aa-control
+vulnforge detect CVE-2026-116078
+vulnforge report CVE-2026-116078
+vulnforge report --all
+
+# Intelligence and source analysis
+vulnforge ingest bandit --refresh
+vulnforge ingest bandit --offline --raw tests/fixtures/osv_bandit.json
+vulnforge analyze CVE-2026-116078 --refresh
+vulnforge triage
+vulnforge triage --check
+vulnforge triage --from-packages
+
+# Runtime cleanup
+vulnforge clean --dry-run
+vulnforge clean
 ```
 
 `vulnforge package validate` checks:
 
 - JSON Schema conformance for advisory, package, lab, probe, detection spec,
-  evidence, exploitability, and provenance;
+  detection evidence, evidence, exploitability, and provenance;
 - CVE consistency across directory name, package manifest, advisory, lab, and
   probe;
 - vulnerable/patched versions matching between the manifest and lab, and
@@ -147,18 +160,8 @@ vulnforge validate CVE-2026-116078 --runs 3 --aa-control
 - `status: validated` agreeing with `last_verdict: CONFIRMED`;
 - the package advisory being in sync with `data/advisories.json`.
 
-The remaining factory commands are explicit stubs:
-
-| Command | Planned milestone |
-|---|---|
-| `vulnforge triage` | version-plan extraction |
-| `vulnforge detect` | M4 |
-| `vulnforge report` | M4 |
-| `vulnforge ingest` | M5 |
-
-`vulnforge lab`, `vulnforge poc`, and `vulnforge validate` are implemented in
-M2/M3. The stubs exit `2` with a message naming the milestone; they do not
-silently do nothing. See `docs/vulnforge-architecture.md` for the full design.
+There are no unimplemented CLI stubs left. See the docs index in `README.md`
+for authoring/ingestion/verdict/CI details.
 
 ### Package layout
 
@@ -271,11 +274,16 @@ Typical full regeneration:
 ## 2. Tests and detection self-test
 
 ```bash
-# All Python unit tests (76 currently; 1 Docker integration test skipped by default)
+# All Python unit tests (92 currently; 2 Docker integration tests skipped by default)
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 
-# Real Docker build/start/status/stop for the first package
+# Lint
+.venv/bin/ruff check src tests
+
+# Real Docker integration: Bandit lab + toy adapter
 VULNFORGE_DOCKER=1 .venv/bin/python -m unittest tests.test_lab_integration -v
+VULNFORGE_DOCKER=1 .venv/bin/python -m unittest \
+  tests.test_adapter_contract.ToyAdapterDockerTests -v
 
 # Single file
 .venv/bin/python tests/test_version_resolver.py
@@ -445,17 +453,18 @@ and `ERROR` exit `1`.
 
 ### Current multi-run results (2026-11-04)
 
-| CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict |
+| CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict | Detection |
 |---|---|---|---|---:|---:|---|---|
-| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 8.03 MB | 0.55 MB | 3 | **CONFIRMED** |
-| CVE-2026-111101 | 1.13.1 -> 1.14.0 | attack memory | 2.80 MB | 1.75 MB | 3 | **INCONCLUSIVE** |
+| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 5.03 MiB | 0.58 MiB | 3 | **CONFIRMED** | **TRIGGERED** |
+| CVE-2026-111101 | 1.13.1 -> 1.14.0 | attack memory | 2.66 MiB | 1.67 MiB | 3 | **INCONCLUSIVE** | **INCONCLUSIVE** |
 
-CVE-2026-116078: run ranges do not overlap (vulnerable 5.16–9.99 MB, patched
-0.52–0.59 MB).
+CVE-2026-116078: run ranges do not overlap; the memory-outlier rule
+discriminates vulnerable from patched (z 26–45 vs 2.5–2.8).
 
 CVE-2026-111101: the corrected first-fixed pair shows a stable **1.60x**
-reduction, below the pre-registered 2.00x threshold. This is an honest
-inconclusive result, not a confirmed finding.
+reduction, below the pre-registered 2.00x threshold. Detection also fires on
+both targets, so it is not discriminating. This is an honest inconclusive
+result, not a confirmed finding.
 
 ### Legacy single-run harness
 
@@ -468,6 +477,76 @@ inconclusive result, not a confirmed finding.
 The legacy harness still uses `probes/registry.py` and single-run amplification
 factors. It is retained for historical comparison; the M3 package validator is
 the authoritative path.
+
+### Detection (M4)
+
+```bash
+vulnforge detect CVE-2026-116078
+vulnforge detect --all --json
+```
+
+Detection runs offline over `evidence/runs/` and `evidence/telemetry/`. It
+writes `detection/evidence.json` with per-target rule results. A signal is
+called discriminating only when it fires on vulnerable and not patched;
+frame-rate/body-duration rules may fire on both because the same traffic
+reaches both targets.
+
+### Reports (M4)
+
+```bash
+vulnforge report CVE-2026-116078
+vulnforge report --all
+```
+
+Per-CVE `report.md`/`report.json` are generated from advisory, analysis,
+validation, detection, provenance, and evidence hashes. The global
+`reports/technical-report.md` aggregates package validation and detection.
+The global report date comes from the latest validation evidence, so it is
+deterministic.
+
+### Ingestion and source analysis (M5)
+
+```bash
+vulnforge ingest bandit --refresh
+vulnforge ingest bandit --offline --raw tests/fixtures/osv_bandit.json
+vulnforge ingest bandit --refresh --apply
+vulnforge analyze CVE-2026-116078 --refresh
+```
+
+Ingestion writes a raw snapshot, a proposed catalog, and a unified diff;
+`--apply` is explicit. `analyze` captures commit patches and writes
+`analysis/root-cause.generated.md` without overwriting the human-written
+`analysis/root-cause.md`.
+
+### Triage (M5)
+
+```bash
+vulnforge triage
+vulnforge triage --check
+vulnforge triage --from-packages
+```
+
+`triage` runs the resolver/prioritizer. `--from-packages` overlays packaged
+advisories onto the catalog before regenerating. The full catalog-to-package
+source-of-truth flip is deferred until all advisories have packages.
+
+### Doctor and cleanup (M7)
+
+```bash
+vulnforge doctor
+vulnforge clean --dry-run
+vulnforge clean
+```
+
+`doctor` checks Python, Docker, Compose, config, schemas, and packages.
+`clean` removes generated `.vulnforge` runtime state only.
+
+### CI (M7)
+
+Local checks and the GitHub Actions jobs are documented in
+`docs/ci.md`. The unit job runs pytest, package validation, resolver drift,
+report drift, and ruff. Docker integration runs on manual dispatch/weekly
+schedule.
 
 ---
 
@@ -510,7 +589,9 @@ The resolver raises loudly if a `fixed_in` version is absent from
    `vulnforge.probe`:
 
    - `ProbeTarget` (runtime-derived host/port/admin URL)
-   - `MemorySampler` to capture peak in-flight `erlang_memory.total`
+   - `MemorySampler` to capture peak in-flight `erlang_memory.total`,
+     `process_count`, and `top_process_memory`
+   - `capture_benign_pool(...)` for the memory-outlier rule
    - `enforce_loopback(...)`
    - `validate_payload_budget(...)` and `validate_duration_budget(...)`
    - `Timer`
@@ -536,16 +617,17 @@ The resolver raises loudly if a `fixed_in` version is absent from
    }
    ```
 
-4. Run the package validation and regenerate the report:
+4. Run validation, detection, and report generation:
 
    ```bash
    vulnforge lab start CVE-2026-XXXXXX
    vulnforge validate CVE-2026-XXXXXX --runs 3
+   vulnforge detect CVE-2026-XXXXXX
+   vulnforge report CVE-2026-XXXXXX
    vulnforge lab stop CVE-2026-XXXXXX
-   .venv/bin/python reports/generate_report.py
    ```
 
-The package manifest is the source of truth for the M3 validator. The legacy
+The package manifest is the source of truth for the validator. The legacy
 `probes/registry.py` remains for the pre-factory harness only.
 
 ---

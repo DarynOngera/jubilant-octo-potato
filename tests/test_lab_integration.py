@@ -47,10 +47,10 @@ class LabIntegrationTests(unittest.TestCase):
             status = orchestrator.status(pkg)
             self.assertTrue(status["running"])
             self.assertEqual(
-                status["services"]["vulnerable"]["bandit_version"], "1.14.0"
+                status["services"]["vulnerable"]["reported_version"], "1.14.0"
             )
             self.assertEqual(
-                status["services"]["patched"]["bandit_version"], "1.14.1"
+                status["services"]["patched"]["reported_version"], "1.14.1"
             )
             for service in status["services"].values():
                 self.assertTrue(service["healthy"])

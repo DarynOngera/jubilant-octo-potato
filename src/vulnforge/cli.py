@@ -1,15 +1,8 @@
-"""VulnForge CLI (M1/M2/M3 surface).
+"""VulnForge CLI.
 
-Implemented now:
-  vulnforge status
-  vulnforge package list|show|validate
-  vulnforge lab build|start|stop|status
-  vulnforge poc run
-  vulnforge validate
-
-The remaining factory commands are deliberately stubs until their milestone:
-  ingest (M5), triage (M2 version-plan extraction),
-  detect (M4), report (M4)
+Implemented:
+  status, package list|show|validate, lab build|start|stop|status,
+  poc run, validate, detect, report, ingest, analyze, triage
 """
 from __future__ import annotations
 
@@ -22,13 +15,17 @@ from typing import Any
 
 from . import __version__
 from .config import FactoryConfig, load_config
+from .detect import run_detection
+from .doctor import clean_runtime, run_doctor
 from .errors import PackageError, VulnForgeError
+from .ingest import analyze_package, ingest_bandit
 from .lab import LabOrchestrator
 from .models import Package
 from .packages import find_package, load_packages, validate_package
 from .paths import Paths, find_repo_root
 from .probe import ProbeResult, ProbeTarget, load_probe
 from .targets.loader import load_adapter
+from .triage import run_triage
 from .validate import load_runtime, run_validation
 
 
@@ -256,7 +253,7 @@ def _cmd_lab(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
                         service["container_name"],
                         "yes" if service["running"] else "no",
                         "yes" if service["healthy"] else "no",
-                        str(service["bandit_version"] or "-"),
+                        str(service["reported_version"] or "-"),
                     ]
                     for role, service in status["services"].items()
                 ],
@@ -364,27 +361,201 @@ def _cmd_validate(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) ->
             print(f"  relative reduction: {ratio:.2f}x")
         print(f"  evidence: {result['execution_path']}")
         print(f"  validation: {result['validation_path']}")
-        print(f"  package status updated by the validator")
+        print("  package status updated by the validator")
 
     return 0 if validation["verdict"] == "CONFIRMED" else 1
 
 
-def _planned(name: str, milestone: str):
-    def handler(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
-        print(
-            f"{name}: not implemented in the M1 factory skeleton; "
-            f"planned for {milestone}. See docs/vulnforge-architecture.md.",
-            file=sys.stderr,
+def _cmd_detect(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
+    try:
+        packages = (
+            [find_package(paths, args.cve)]
+            if args.cve
+            else load_packages(paths)
         )
+    except PackageError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+
+    results = []
+    for pkg in packages:
+        errors = validate_package(pkg, paths)
+        if errors:
+            print(f"package {pkg.cve} is invalid:", file=sys.stderr)
+            for error in errors:
+                print(f"  - {error}", file=sys.stderr)
+            return 1
+        result = run_detection(pkg)
+        results.append(result)
+        if not args.json:
+            print(f"{pkg.cve}: {result['result']} -- {result['reason']}")
+            for role, target in result["targets"].items():
+                print(f"  {role:<10} {target['result']} (bandit {target['version']})")
+                for rule in target["rules"]:
+                    flag = "TRIGGERED" if rule["triggered"] else "ok"
+                    print(f"    [{flag:>10}] {rule['id']}: {rule['detail']}")
+
+    if args.json:
+        print(json.dumps(results, indent=2))
+    return (
+        0
+        if all(result["result"] in {"TRIGGERED", "INCONCLUSIVE"} for result in results)
+        else 1
+    )
+
+
+def _cmd_report(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
+    from .report import generate_global_report, write_package_report
+
+    if args.all and args.cve:
+        print("error: pass either a CVE or --all, not both", file=sys.stderr)
         return 2
+    try:
+        packages = (
+            [find_package(paths, args.cve)]
+            if args.cve
+            else load_packages(paths)
+        )
+    except PackageError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
 
-    return handler
+    outputs = []
+    for pkg in packages:
+        errors = validate_package(pkg, paths)
+        if errors:
+            print(f"package {pkg.cve} is invalid:", file=sys.stderr)
+            for error in errors:
+                print(f"  - {error}", file=sys.stderr)
+            return 1
+        report_path, json_path = write_package_report(pkg)
+        outputs.append(
+            {
+                "cve": pkg.cve,
+                "report": str(report_path),
+                "json": str(json_path),
+            }
+        )
+        if not args.json:
+            print(f"Wrote {report_path}")
+            print(f"Wrote {json_path}")
+
+    global_path = None
+    if args.all or not args.cve:
+        global_path = generate_global_report(paths)
+        if not args.json:
+            print(f"Wrote {global_path}")
+
+    if args.json:
+        print(
+            json.dumps(
+                {"packages": outputs, "global": str(global_path) if global_path else None},
+                indent=2,
+            )
+        )
+    return 0
 
 
-def _add_planned(subparsers, name: str, milestone: str, help_text: str) -> None:
-    parser = subparsers.add_parser(name, help=help_text)
-    parser.add_argument("cve", nargs="?", help="CVE identifier")
-    parser.set_defaults(func=_planned(name, milestone))
+def _cmd_ingest(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
+    if args.target != "bandit":
+        print(f"error: unsupported ingest target {args.target!r}", file=sys.stderr)
+        return 2
+    raw_path = Path(args.raw).expanduser() if args.raw else None
+    result = ingest_bandit(
+        paths,
+        offline=args.offline,
+        apply=args.apply,
+        raw_path=raw_path,
+    )
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        changes = result["changes"]
+        print(f"source: {result['source']}")
+        print(f"normalized advisories: {result['normalized']}")
+        print(
+            f"added: {len(changes['added'])}, changed: "
+            f"{len(changes['changed'])}, unchanged: {len(changes['unchanged'])}"
+        )
+        print(f"proposal: {result['proposed']}")
+        print(f"diff: {result['diff']}")
+        if result["applied"]:
+            print("applied to data/advisories.json")
+        else:
+            print("dry-run; pass --apply to update data/advisories.json")
+    return 0
+
+
+def _cmd_analyze(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
+    try:
+        pkg = find_package(paths, args.cve)
+    except PackageError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    result = analyze_package(pkg, refresh=args.refresh)
+    if args.json:
+        print(json.dumps(result, indent=2))
+    else:
+        print(f"{pkg.cve}: captured {len(result['commits'])} commit(s)")
+        for item in result["commits"]:
+            print(f"  {item['commit']} -> {item['patch']}")
+        if result["changed_files"]:
+            print("  changed files: " + ", ".join(result["changed_files"]))
+        for error in result["errors"]:
+            print(f"  error {error['commit']}: {error['error']}", file=sys.stderr)
+        print(f"  scaffold: {result['scaffold']}")
+    return 0 if not result["errors"] else 1
+
+
+def _cmd_triage(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
+    result = run_triage(
+        paths,
+        check=args.check,
+        from_packages=args.from_packages,
+    )
+    if args.json:
+        print(json.dumps(result, indent=2))
+    elif args.check:
+        print(result["stdout"], end="")
+        if result["stderr"]:
+            print(result["stderr"], end="", file=sys.stderr)
+    else:
+        if result.get("overlaid"):
+            print("overlaid packaged advisories: " + ", ".join(result["overlaid"]))
+        print(result["resolver"], end="")
+        print(result["prioritizer"], end="")
+    return int(result.get("returncode", 0))
+
+
+def _cmd_doctor(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
+    checks = run_doctor(paths)
+    if args.json:
+        print(
+            json.dumps(
+                [
+                    {"name": check.name, "ok": check.ok, "detail": check.detail}
+                    for check in checks
+                ],
+                indent=2,
+            )
+        )
+    else:
+        for check in checks:
+            flag = "OK" if check.ok else "FAIL"
+            print(f"[{flag:>4}] {check.name}: {check.detail}")
+    return 0 if all(check.ok for check in checks) else 1
+
+
+def _cmd_clean(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
+    removed = clean_runtime(paths, dry_run=args.dry_run)
+    if args.json:
+        print(json.dumps([str(path) for path in removed], indent=2))
+    else:
+        for path in removed:
+            print(f"{'would remove' if args.dry_run else 'removed'} {path}")
+        if not removed:
+            print("nothing to clean")
+    return 0
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -478,10 +649,65 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--json", action="store_true", help="emit JSON")
     validate.set_defaults(func=_cmd_validate)
 
-    _add_planned(subparsers, "ingest", "M5", "ingest advisory intelligence (M5)")
-    _add_planned(subparsers, "triage", "M2", "recompute versions and priorities (M2)")
-    _add_planned(subparsers, "detect", "M4", "run detection rules (M4)")
-    _add_planned(subparsers, "report", "M4", "render package/global reports (M4)")
+    detect = subparsers.add_parser(
+        "detect", help="run behavioral detection over captured evidence"
+    )
+    detect.add_argument("cve", nargs="?", help="CVE identifier (omit for all)")
+    detect.add_argument("--all", action="store_true", help="run every package")
+    detect.add_argument("--json", action="store_true", help="emit JSON")
+    detect.set_defaults(func=_cmd_detect)
+
+    report = subparsers.add_parser(
+        "report", help="generate per-CVE and global reports from evidence"
+    )
+    report.add_argument("cve", nargs="?", help="CVE identifier (omit for all)")
+    report.add_argument("--all", action="store_true", help="generate every package and the global report")
+    report.add_argument("--json", action="store_true", help="emit JSON")
+    report.set_defaults(func=_cmd_report)
+
+    ingest = subparsers.add_parser(
+        "ingest", help="fetch/normalize advisory intelligence and propose a diff"
+    )
+    ingest.add_argument("target", choices=["bandit"], help="target name")
+    ingest.add_argument("--refresh", action="store_true", help="force a network refresh")
+    ingest.add_argument("--offline", action="store_true", help="use a cached snapshot")
+    ingest.add_argument("--raw", help="path to a cached snapshot (with --offline)")
+    ingest.add_argument("--apply", action="store_true", help="write the merged catalog")
+    ingest.add_argument("--json", action="store_true", help="emit JSON")
+    ingest.set_defaults(func=_cmd_ingest)
+
+    analyze = subparsers.add_parser(
+        "analyze", help="capture fixing-commit patches and generate a root-cause scaffold"
+    )
+    analyze.add_argument("cve", help="CVE identifier")
+    analyze.add_argument("--refresh", action="store_true", help="re-fetch cached patches")
+    analyze.add_argument("--json", action="store_true", help="emit JSON")
+    analyze.set_defaults(func=_cmd_analyze)
+
+    triage = subparsers.add_parser(
+        "triage", help="regenerate version exposure/checkpoints and the priority matrix"
+    )
+    triage.add_argument("--check", action="store_true", help="verify generated artifacts")
+    triage.add_argument(
+        "--from-packages",
+        action="store_true",
+        help="overlay packaged advisories onto the global catalog first",
+    )
+    triage.add_argument("--json", action="store_true", help="emit JSON")
+    triage.set_defaults(func=_cmd_triage)
+
+    doctor = subparsers.add_parser(
+        "doctor", help="check Python, Docker, config, schemas, and packages"
+    )
+    doctor.add_argument("--json", action="store_true", help="emit JSON")
+    doctor.set_defaults(func=_cmd_doctor)
+
+    clean = subparsers.add_parser(
+        "clean", help="remove generated .vulnforge runtime state"
+    )
+    clean.add_argument("--dry-run", action="store_true", help="show what would be removed")
+    clean.add_argument("--json", action="store_true", help="emit JSON")
+    clean.set_defaults(func=_cmd_clean)
 
     return parser
 

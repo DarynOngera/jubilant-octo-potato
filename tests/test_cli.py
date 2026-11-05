@@ -75,11 +75,15 @@ class CliTests(unittest.TestCase):
         self.assertTrue(all(item["ok"] for item in payload))
         self.assertTrue(all(item["errors"] == [] for item in payload))
 
-    def test_planned_commands_are_explicit(self):
-        code, _, err = run_cli("detect", CVE)
-        self.assertEqual(code, 2)
-        self.assertIn("not implemented", err)
-        self.assertIn("M4", err)
+    def test_detect_116078(self):
+        code, out, _ = run_cli("detect", CVE)
+        self.assertEqual(code, 0)
+        self.assertIn("TRIGGERED", out)
+
+    def test_triage_check(self):
+        code, out, _ = run_cli("triage", "--check")
+        self.assertEqual(code, 0)
+        self.assertIn("OK:", out)
 
     def test_validate_without_runtime_is_helpful(self):
         code, _, err = run_cli("validate", "CVE-2026-111101")

@@ -97,7 +97,7 @@ Verdict modes:
 
 ## Current packages
 
-| CVE | Target | Status | Pair | Metric | Verdict |
-|---|---|---|---|---|---|
-| CVE-2026-116078 | bandit | validated | 1.14.0 -> 1.14.1 | attack memory | CONFIRMED (8.03 MB vs 0.55 MB) |
-| CVE-2026-111101 | bandit | inconclusive | 1.13.1 -> 1.14.0 | attack memory | INCONCLUSIVE (1.60x < 2.00x) |
+| CVE | Target | Status | Pair | Metric | Verdict | Detection |
+|---|---|---|---|---|---|---|
+| CVE-2026-116078 | bandit | validated | 1.14.0 -> 1.14.1 | attack memory | CONFIRMED (5.03 MiB vs 0.58 MiB) | TRIGGERED |
+| CVE-2026-111101 | bandit | inconclusive | 1.13.1 -> 1.14.0 | attack memory | INCONCLUSIVE (1.60x < 2.00x) | INCONCLUSIVE |

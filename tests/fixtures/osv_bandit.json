@@ -1,0 +1,62 @@
+{
+  "retrieved_at": "2026-11-04T00:00:00Z",
+  "source": "fixture",
+  "package": {"name": "bandit", "ecosystem": "Hex"},
+  "response_sha256": "0000000000000000000000000000000000000000000000000000000000000000",
+  "response": {
+    "vulns": [
+      {
+        "id": "EEF-CVE-2026-116078",
+        "aliases": ["CVE-2026-116078", "GHSA-pxjf-g536-7r93"],
+        "summary": "HTTP/2 request bodies made of 1-byte DATA frames amplify memory use in Bandit",
+        "published": "2026-10-28T00:00:00Z",
+        "affected": [
+          {
+            "package": {"ecosystem": "Hex", "name": "bandit"},
+            "ranges": [
+              {
+                "type": "ECOSYSTEM",
+                "events": [{"introduced": "0.3.1"}, {"fixed": "1.14.1"}]
+              }
+            ]
+          }
+        ],
+        "severity": [
+          {
+            "type": "CVSS_V4",
+            "score": "CVSS:4.0/AV:N/AC:L/AT:N/PR:N/UI:N/VC:N/VI:N/VA:H/SC:N/SI:N/SA:N"
+          }
+        ],
+        "references": [
+          {"type": "ADVISORY", "url": "https://github.com/mtrudel/bandit/security/advisories/GHSA-pxjf-g536-7r93"},
+          {"type": "FIX", "url": "https://github.com/mtrudel/bandit/commit/327bb02ff84171237e1aeff787930debd16155ee"}
+        ]
+      },
+      {
+        "id": "GHSA-fixture-0001",
+        "aliases": ["CVE-2026-900001", "GHSA-fixture-0001"],
+        "summary": "Fixture-only advisory for ingestion tests",
+        "published": "2026-11-01T00:00:00Z",
+        "affected": [
+          {
+            "package": {"ecosystem": "Hex", "name": "bandit"},
+            "ranges": [
+              {
+                "type": "ECOSYSTEM",
+                "events": [{"introduced": "1.0.0"}, {"fixed": "1.2.0"}]
+              }
+            ]
+          }
+        ],
+        "references": [
+          {"type": "WEB", "url": "https://example.invalid/advisory"}
+        ]
+      },
+      {
+        "id": "GHSA-no-cve",
+        "aliases": ["GHSA-no-cve"],
+        "summary": "No CVE alias should be skipped"
+      }
+    ]
+  }
+}

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import threading
 import time
+import urllib.error
+import urllib.request
 from functools import lru_cache
 from typing import Any
 
@@ -91,11 +93,19 @@ class MemorySampler:
         try:
             stats = self.target.admin_stats()
             total = stats.get("erlang_memory", {}).get("total")
+            top_processes = stats.get("top_processes") or []
+            top_memory = max(
+                (int(process.get("memory", 0)) for process in top_processes),
+                default=0,
+            )
             if isinstance(total, int):
                 self.samples.append(
                     {
                         "t": round(time.monotonic() - self._t0, 6),
                         "total": total,
+                        "process_count": stats.get("process_count"),
+                        "top_process_memory": top_memory,
+                        "run_queue": stats.get("run_queue"),
                     }
                 )
         except Exception:
@@ -124,3 +134,42 @@ class MemorySampler:
     @property
     def peak(self) -> int | None:
         return max((int(sample["total"]) for sample in self.samples), default=None)
+
+
+def capture_benign_pool(
+    target: ProbeTarget,
+    count: int = 8,
+    path: str = "/healthz",
+) -> list[dict[str, Any]]:
+    """Capture a small normal-connection pool for the memory-outlier rule.
+
+    The lab has only one attack connection; without a benign pool the outlier
+    rule would have a pool size of one. These requests are cheap and are
+    recorded in probe observations for offline detection.
+    """
+    pool: list[dict[str, Any]] = []
+    url = f"{target.base_url.rstrip('/')}{path}"
+    for index in range(count):
+        before_stats = target.admin_stats()
+        before = before_stats.get("erlang_memory", {}).get("total", 0)
+        started = time.monotonic()
+        error = None
+        try:
+            with urllib.request.urlopen(url, timeout=5) as response:
+                response.read()
+        except (urllib.error.URLError, ConnectionError, TimeoutError) as exc:
+            error = str(exc)
+        elapsed = time.monotonic() - started
+        after_stats = target.admin_stats()
+        after = after_stats.get("erlang_memory", {}).get("total", 0)
+        pool.append(
+            {
+                "conn_id": f"benign-{index + 1}",
+                "frames_or_chunks": 1,
+                "bytes_total": 0,
+                "duration_s": round(elapsed, 6),
+                "attributable_memory_bytes": max(0, int(after) - int(before)),
+                "error": error,
+            }
+        )
+    return pool

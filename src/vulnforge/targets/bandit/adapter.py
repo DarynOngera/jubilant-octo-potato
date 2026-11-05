@@ -31,6 +31,13 @@ class BanditAdapter:
     def build_args(self, version: str, cve: str, role: str) -> dict[str, str]:
         return {"BANDIT_VERSION": version}
 
+    def lockfile(self, version: str) -> Path | None:
+        return self.app_dir / "locks" / f"mix-{version}.lock"
+
+    def version_from_stats(self, stats: dict[str, Any]) -> str | None:
+        value = stats.get("bandit_version")
+        return str(value) if value is not None else None
+
     def labels(
         self, cve: str, role: str, version: str, git_commit: str
     ) -> dict[str, str]:

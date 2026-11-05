@@ -27,6 +27,14 @@ class TargetAdapter(Protocol):
         self, cve: str, role: str, version: str, git_commit: str
     ) -> dict[str, str]: ...
 
+    def lockfile(self, version: str) -> Path | None:
+        """Return the dependency lockfile for a version, or None if not applicable."""
+        ...
+
+    def version_from_stats(self, stats: dict[str, Any]) -> str | None:
+        """Extract the reported target version from a stats payload."""
+        ...
+
     def service(
         self,
         target: LabTarget,

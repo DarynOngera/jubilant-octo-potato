@@ -432,12 +432,12 @@ CVSS answers 'how bad if it fires, under worst-case assumptions.' It does not an
 - `CVE-2026-111101` -> `vulnerabilities/CVE-2026-111101/poc/exploit.py` (vulnerable `vulnerable` vs patched `interim`; metric `attack_memory_delta`)
 - `CVE-2026-116078` -> `vulnerabilities/CVE-2026-116078/poc/exploit.py` (vulnerable `interim` vs patched `patched`; metric `attack_memory_delta`)
 
-M3 multi-run results (`vulnerabilities/*/evidence/validation.json`):
+Multi-run results (`vulnerabilities/*/evidence/validation.json`):
 
-| CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict |
-|---|---|---|---|---|---|---|
-| `CVE-2026-111101` | `1.13.1` -> `1.14.0` | `attack_memory_delta` | 2.67 MiB | 1.67 MiB | 3 | **INCONCLUSIVE** |
-| `CVE-2026-116078` | `1.14.0` -> `1.14.1` | `attack_memory_delta` | 7.66 MiB | 0.52 MiB | 3 | **CONFIRMED** |
+| CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict | Detection |
+|---|---|---|---|---|---|---|---|
+| `CVE-2026-111101` | `1.13.1` -> `1.14.0` | `attack_memory_delta` | 2.66 MiB | 1.67 MiB | 3 | **INCONCLUSIVE** | INCONCLUSIVE |
+| `CVE-2026-116078` | `1.14.0` -> `1.14.1` | `attack_memory_delta` | 5.03 MiB | 0.58 MiB | 3 | **CONFIRMED** | TRIGGERED |
 
 Verdicts are median-based with a patched-CV guard; run ranges must not overlap in absolute mode. A non-`CONFIRMED` verdict is a real result, not a reporting gap.
 - `CVE-2026-111101`: INCONCLUSIVE -- relative reduction 1.60x is below the pre-registered 2.00x threshold

@@ -132,6 +132,11 @@ def load_package(package_root: Path, schemas_dir: Path) -> Package:
                 "detection/spec.json",
             ),
             (
+                package_root / manifest.paths.get("detection", "detection") / "evidence.json",
+                "detection",
+                "detection/evidence.json",
+            ),
+            (
                 package_root / manifest.paths.get("evidence", "evidence") / "execution.json",
                 "evidence",
                 "evidence/execution.json",

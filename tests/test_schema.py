@@ -12,7 +12,10 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 from vulnforge.schema import SCHEMA_FILES, load_schema, validate_instance  # noqa: E402
 
 SCHEMAS = REPO_ROOT / "schemas"
-PACKAGE = REPO_ROOT / "vulnerabilities" / "CVE-2026-116078"
+PACKAGES = [
+    REPO_ROOT / "vulnerabilities" / "CVE-2026-116078",
+    REPO_ROOT / "vulnerabilities" / "CVE-2026-111101",
+]
 
 
 class SchemaTests(unittest.TestCase):
@@ -22,25 +25,27 @@ class SchemaTests(unittest.TestCase):
                 load_schema(SCHEMAS, name)
 
     def test_package_files_match_their_schemas(self):
-        checks = [
-            ("advisory", PACKAGE / "advisory.json"),
-            ("package", PACKAGE / "package.json"),
-            ("lab", PACKAGE / "lab" / "lab.json"),
-            ("probe", PACKAGE / "poc" / "manifest.json"),
-            ("exploitability", PACKAGE / "analysis" / "exploitability.json"),
-            ("detection-spec", PACKAGE / "detection" / "spec.json"),
-            ("evidence", PACKAGE / "evidence" / "execution.json"),
-            ("provenance", PACKAGE / "lab" / "provenance.json"),
-        ]
-        for schema_name, path in checks:
-            with self.subTest(path=path.name):
-                data = json.loads(path.read_text())
-                self.assertEqual(
-                    validate_instance(
-                        data, SCHEMAS, schema_name, label=path.name
-                    ),
-                    [],
-                )
+        for package in PACKAGES:
+            checks = [
+                ("advisory", package / "advisory.json"),
+                ("package", package / "package.json"),
+                ("lab", package / "lab" / "lab.json"),
+                ("probe", package / "poc" / "manifest.json"),
+                ("exploitability", package / "analysis" / "exploitability.json"),
+                ("detection-spec", package / "detection" / "spec.json"),
+                ("detection", package / "detection" / "evidence.json"),
+                ("evidence", package / "evidence" / "execution.json"),
+                ("provenance", package / "lab" / "provenance.json"),
+            ]
+            for schema_name, path in checks:
+                with self.subTest(package=package.name, path=path.name):
+                    data = json.loads(path.read_text())
+                    self.assertEqual(
+                        validate_instance(
+                            data, SCHEMAS, schema_name, label=path.name
+                        ),
+                        [],
+                    )
 
 
 if __name__ == "__main__":
