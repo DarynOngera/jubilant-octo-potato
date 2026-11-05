@@ -13,7 +13,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from vulnforge.config import load_config  # noqa: E402
-from vulnforge.models import Package  # noqa: E402
+from vulnforge.models import LabSpec, Package, PackageManifest  # noqa: E402
 from vulnforge.packages import (  # noqa: E402
     check_package_consistency,
     discover_package_dirs,
@@ -134,6 +134,60 @@ class PackageModelTests(unittest.TestCase):
             any("requires last_verdict 'CONFIRMED'" in error for error in modified.errors),
             modified.errors,
         )
+
+    def test_adapter_alias_is_accepted_as_target(self):
+        manifest = PackageManifest.from_dict(
+            {
+                "schema_version": "1.0",
+                "cve": CVE,
+                "adapter": "bandit",
+                "status": "draft",
+                "versions": {
+                    "vulnerable": "1.14.0",
+                    "patched": "1.14.1",
+                    "first_fixed": "1.14.1",
+                    "affected": [">= 0.3.1 and < 1.14.1"],
+                },
+                "paths": {},
+            }
+        )
+        self.assertEqual(manifest.target, "bandit")
+        self.assertEqual(manifest.adapter_name, "bandit")
+
+        lab = LabSpec.from_dict(
+            {
+                "schema_version": "1.0",
+                "cve": CVE,
+                "adapter": "bandit",
+                "app": "lab/app",
+                "versions": {"vulnerable": "1.14.0", "patched": "1.14.1"},
+                "targets": [
+                    {
+                        "role": "vulnerable",
+                        "name": "interim",
+                        "version": "1.14.0",
+                        "base_url": "http://127.0.0.1:4000",
+                        "admin_url": "http://127.0.0.1:4001",
+                    },
+                    {
+                        "role": "patched",
+                        "name": "patched",
+                        "version": "1.14.1",
+                        "base_url": "http://127.0.0.1:4010",
+                        "admin_url": "http://127.0.0.1:4011",
+                    },
+                ],
+                "limits": {
+                    "mem_limit_mb": 512,
+                    "cpus": 1.0,
+                    "pids_limit": 512,
+                    "max_duration_seconds": 120,
+                    "max_request_bytes_total": 268435456,
+                },
+            }
+        )
+        self.assertEqual(lab.target, "bandit")
+        self.assertEqual(lab.adapter_name, "bandit")
 
     def test_missing_manifest_reports_error(self):
         with tempfile.TemporaryDirectory() as tmp:

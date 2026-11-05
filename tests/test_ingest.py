@@ -12,10 +12,11 @@ FIXTURE = Path(__file__).resolve().parent / "fixtures" / "osv_bandit.json"
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from vulnforge.config import load_config  # noqa: E402
-from vulnforge.ingest import ingest_bandit  # noqa: E402
+from vulnforge.ingest import IngestError, ingest_bandit, ingest_target  # noqa: E402
 from vulnforge.ingest.osv import load_snapshot, normalize_osv  # noqa: E402
 from vulnforge.ingest.proposal import load_catalog, merge_advisories  # noqa: E402
 from vulnforge.paths import Paths  # noqa: E402
+from vulnforge.targets.intelligence import IntelligenceSpec  # noqa: E402
 
 
 class IngestTests(unittest.TestCase):
@@ -64,6 +65,14 @@ class IngestTests(unittest.TestCase):
             config=self.real.config,
             schemas=self.real.schemas,
         )
+
+    def test_target_without_osv_coordinates_is_refused(self):
+        with self.assertRaises(IngestError):
+            ingest_target(
+                self.real,
+                IntelligenceSpec(name="toy", display_name="Toy"),
+                offline=True,
+            )
 
     def test_offline_refresh_is_deterministic_and_apply_sticks(self):
         with tempfile.TemporaryDirectory() as tmp:

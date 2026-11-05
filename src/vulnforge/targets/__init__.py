@@ -1,5 +1,6 @@
 """Target adapters."""
 
 from .base import TargetAdapter
+from .intelligence import IntelligenceSpec
 
-__all__ = ["TargetAdapter"]
+__all__ = ["IntelligenceSpec", "TargetAdapter"]

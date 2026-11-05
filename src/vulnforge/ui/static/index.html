@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>VulnForge</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <a class="brand" href="#/overview">
+        <span class="brand-mark">VF</span>
+        <span>
+          <strong>VulnForge</strong>
+          <small>local research factory</small>
+        </span>
+      </a>
+      <nav class="nav">
+        <a href="#/overview" data-nav="overview">Overview</a>
+        <a href="#/labs" data-nav="labs">Labs</a>
+        <a href="#/matrix" data-nav="matrix">Priority matrix</a>
+        <a href="#/activity" data-nav="activity">Activity</a>
+        <a href="#/doctor" data-nav="doctor">Health</a>
+      </nav>
+      <div class="sidebar-foot">
+        <div id="mode-indicator" class="mode">connecting…</div>
+        <div id="root-path" class="root-path"></div>
+        <a class="docs-link" href="https://github.com/DarynOngera/jubilant-octo-potato" target="_blank" rel="noreferrer">repository ↗</a>
+      </div>
+    </aside>
+    <main id="main" class="main">
+      <div class="loading">Loading VulnForge…</div>
+    </main>
+  </div>
+
+  <div id="toast" class="toast hidden" role="status" aria-live="polite"></div>
+
+  <div id="modal" class="modal-backdrop" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <div class="modal-head">
+        <h2 id="modal-title">Action</h2>
+        <button class="icon-button" type="button" data-close-modal aria-label="Close">×</button>
+      </div>
+      <div id="modal-body" class="modal-body"></div>
+    </div>
+  </div>
+
+  <script src="/static/vendor/marked.min.js"></script>
+  <script src="/static/vendor/purify.min.js"></script>
+  <script src="/static/app.js"></script>
+</body>
+</html>

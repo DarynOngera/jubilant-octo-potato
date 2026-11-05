@@ -9,6 +9,8 @@ from typing import Any
 
 from ...lab.models import ServicePlan
 from ...models import LabTarget
+from ...probe.measurement import MeasurementSpec, read_toy_stats
+from ..intelligence import IntelligenceSpec
 
 TOY_BASE_IMAGE = "python:3.12-slim"
 
@@ -99,3 +101,16 @@ class ToyAdapter:
                 return json.loads(response.read())
         except (urllib.error.URLError, ConnectionError, TimeoutError, json.JSONDecodeError):
             return None
+
+    def measurement(self) -> MeasurementSpec:
+        # The toy target is a single-listener Python process. It has no
+        # forced-GC endpoint, but it does expose native memory counters.
+        return MeasurementSpec(
+            gc_path=None,
+            reader=read_toy_stats,
+            use_app_listener=True,
+        )
+
+    def intelligence(self) -> IntelligenceSpec:
+        # The toy target has no public advisory feed or commit host.
+        return IntelligenceSpec(name=self.name, display_name="Toy")

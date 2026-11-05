@@ -103,7 +103,7 @@ def build_provenance(
     data: dict[str, Any] = {
         "schema_version": "1.0",
         "cve": package.cve,
-        "target": package.manifest.target,
+        "target": package.manifest.adapter_name,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "build": {
             "app_dir": _relative(adapter.app_dir, cfg.root),

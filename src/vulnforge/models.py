@@ -67,7 +67,7 @@ class PackageManifest:
         return cls(
             schema_version=str(data.get("schema_version", "1.0")),
             cve=str(data["cve"]),
-            target=str(data["target"]),
+            target=str(data.get("target") or data.get("adapter") or ""),
             status=str(data["status"]),
             versions=dict(data["versions"]),
             paths=dict(data["paths"]),
@@ -86,6 +86,11 @@ class PackageManifest:
     @property
     def first_fixed(self) -> str:
         return str(self.versions.get("first_fixed", ""))
+
+    @property
+    def adapter_name(self) -> str:
+        """Canonical adapter name; ``target`` remains a legacy alias."""
+        return self.target
 
     @property
     def last_verdict(self) -> str:
@@ -128,7 +133,7 @@ class LabSpec:
         return cls(
             schema_version=str(data.get("schema_version", "1.0")),
             cve=str(data["cve"]),
-            target=str(data["target"]),
+            target=str(data.get("target") or data.get("adapter") or ""),
             app=str(data["app"]),
             network=data.get("network"),
             versions={str(k): str(v) for k, v in dict(data["versions"]).items()},
@@ -142,6 +147,11 @@ class LabSpec:
             if target.role == role:
                 return target
         return None
+
+    @property
+    def adapter_name(self) -> str:
+        """Canonical adapter name; ``target`` remains a legacy alias."""
+        return self.target
 
 
 @dataclass(frozen=True)

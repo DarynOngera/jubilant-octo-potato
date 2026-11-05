@@ -7,13 +7,22 @@ import json
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from vulnforge.cli import main  # noqa: E402
+from vulnforge.errors import LabError  # noqa: E402
 
 CVE = "CVE-2026-116078"
+
+
+def _missing_runtime(paths, cve):
+    raise LabError(
+        f"no runtime for {cve} at {paths.root / '.vulnforge'} . "
+        f"Run `vulnforge lab start {cve}` first."
+    )
 
 
 def run_cli(*args: str) -> tuple[int, str, str]:
@@ -84,12 +93,18 @@ class CliTests(unittest.TestCase):
         self.assertIn("OK:", out)
 
     def test_validate_without_runtime_is_helpful(self):
-        code, _, err = run_cli("validate", "CVE-2026-111101")
+        with mock.patch(
+            "vulnforge.validate.harness.load_runtime", side_effect=_missing_runtime
+        ):
+            code, _, err = run_cli("validate", "CVE-2026-111101")
         self.assertEqual(code, 2)
         self.assertIn("lab start CVE-2026-111101", err)
 
     def test_poc_without_runtime_is_helpful(self):
-        code, _, err = run_cli("poc", "run", "CVE-2026-111101")
+        with mock.patch(
+            "vulnforge.commands.lab.load_runtime", side_effect=_missing_runtime
+        ):
+            code, _, err = run_cli("poc", "run", "CVE-2026-111101")
         self.assertEqual(code, 2)
         self.assertIn("lab start CVE-2026-111101", err)
 

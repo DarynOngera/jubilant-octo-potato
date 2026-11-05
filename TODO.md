@@ -63,6 +63,16 @@ future items.
 - [x] Final README/usage updates
 - [ ] Optional OCI registry / SBOM / signing — future work
 
+## M8 — local UI (done)
+
+- [x] Stdlib loopback server (`vulnforge ui`) with no new dependencies
+- [x] Read model over packages, validation, detection, provenance, and matrix
+- [x] Overview, CVE detail, labs, matrix, activity, and health pages
+- [x] Vendored offline Markdown rendering with downloadable reports
+- [x] Allowlisted job runner for lab/validation/detection/report actions
+- [x] CSRF, loopback Host/Origin checks, and action validation
+- [x] UI tests and docs
+
 ## Current results
 
 | CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict | Detection |

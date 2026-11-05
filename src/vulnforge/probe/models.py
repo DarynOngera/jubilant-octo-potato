@@ -9,6 +9,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 from ..lab.models import ServicePlan
+from .measurement import DEFAULT_MEASUREMENT, MeasurementSpec
 
 
 @dataclass(frozen=True)
@@ -16,6 +17,7 @@ class ProbeTarget:
     name: str
     base_url: str
     admin_url: str
+    measurement: MeasurementSpec = field(default_factory=lambda: DEFAULT_MEASUREMENT)
 
     @property
     def host(self) -> str:
@@ -28,14 +30,24 @@ class ProbeTarget:
             raise ValueError(f"target {self.name!r} has no explicit port: {self.base_url}")
         return parsed.port
 
+    @property
+    def measurement_base_url(self) -> str:
+        return self.base_url if self.measurement.use_app_listener else self.admin_url
+
     def admin_stats(self) -> dict[str, Any]:
-        with urllib.request.urlopen(f"{self.admin_url.rstrip('/')}/stats", timeout=10) as response:
+        path = self.measurement.stats_path
+        with urllib.request.urlopen(
+            f"{self.measurement_base_url.rstrip('/')}{path}", timeout=10
+        ) as response:
             return json.loads(response.read())
 
     def admin_gc(self, timeout: float = 10.0) -> bool:
-        """Ask the lab to force a full-BEAM GC. Returns False on old images."""
+        """Ask the lab to force a collection. Returns False when unsupported."""
+        path = self.measurement.gc_path
+        if path is None:
+            return False
         request = urllib.request.Request(
-            f"{self.admin_url.rstrip('/')}/gc",
+            f"{self.measurement_base_url.rstrip('/')}{path}",
             data=b"",
             method="POST",
         )
@@ -46,11 +58,16 @@ class ProbeTarget:
             return False
 
     @classmethod
-    def from_service(cls, service: ServicePlan) -> "ProbeTarget":
+    def from_service(
+        cls,
+        service: ServicePlan,
+        measurement: MeasurementSpec | None = None,
+    ) -> "ProbeTarget":
         return cls(
             name=service.name,
             base_url=service.base_url,
             admin_url=service.admin_url,
+            measurement=measurement or DEFAULT_MEASUREMENT,
         )
 
 

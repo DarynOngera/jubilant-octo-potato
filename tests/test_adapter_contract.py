@@ -37,8 +37,17 @@ class AdapterBoundaryTests(unittest.TestCase):
         )
         adapter = load_adapter(cfg, "toy")
         self.assertIsInstance(adapter, ToyAdapter)
+        self.assertEqual(adapter.repo_root, REPO_ROOT.resolve())
         self.assertIsNone(adapter.lockfile("0.1.0"))
         self.assertEqual(adapter.version_from_stats({"toy_version": "0.1.0"}), "0.1.0")
+        measurement = adapter.measurement()
+        self.assertIsNone(measurement.gc_path)
+        self.assertTrue(measurement.use_app_listener)
+        sample = measurement.reader({"memory_bytes": 123, "process_count": 1})
+        assert sample is not None
+        self.assertEqual(sample.total, 123)
+        self.assertEqual(adapter.intelligence().name, "toy")
+        self.assertIsNone(adapter.intelligence().osv_package)
 
     def test_core_has_no_bandit_imports(self):
         core = [

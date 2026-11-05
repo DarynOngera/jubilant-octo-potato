@@ -9,6 +9,8 @@ from typing import Any
 
 from ...lab.models import ServicePlan
 from ...models import LabTarget
+from ...probe.measurement import MeasurementSpec
+from ..intelligence import IntelligenceSpec
 
 BANDIT_BASE_IMAGE = (
     "hexpm/elixir:1.17.3-erlang-27.1.2-debian-bookworm-20241202-slim"
@@ -113,3 +115,17 @@ class BanditAdapter:
                 return json.loads(response.read())
         except (urllib.error.URLError, ConnectionError, TimeoutError, json.JSONDecodeError):
             return None
+
+    def measurement(self) -> MeasurementSpec:
+        # The Bandit lab app exposes BEAM memory, process, and /gc endpoints.
+        return MeasurementSpec()
+
+    def intelligence(self) -> IntelligenceSpec:
+        return IntelligenceSpec(
+            name=self.name,
+            display_name="Bandit",
+            ecosystem="Hex",
+            package="bandit",
+            github_repo="mtrudel/bandit",
+            advisories_url="https://hex.pm/packages/bandit/advisories",
+        )

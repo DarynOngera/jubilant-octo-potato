@@ -36,8 +36,8 @@ class Handler(BaseHTTPRequestHandler):
             payload = {
                 "toy_version": VERSION,
                 "process_count": 1,
-                "erlang_memory": {"total": rss_bytes()},
-                "top_processes": [{"memory": rss_bytes()}],
+                "memory_bytes": rss_bytes(),
+                "top_process_memory_bytes": rss_bytes(),
             }
             self._send(
                 200,

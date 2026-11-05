@@ -128,6 +128,11 @@ class LabPlanTests(unittest.TestCase):
             [],
         )
 
+    def test_bandit_intelligence_coordinates(self):
+        intelligence = self.adapter.intelligence()
+        self.assertEqual(intelligence.osv_package, {"name": "bandit", "ecosystem": "Hex"})
+        self.assertEqual(intelligence.github_repo, "mtrudel/bandit")
+
     def test_image_tags_include_cve_role_and_version(self):
         self.assertEqual(
             self.adapter.image_tag(CVE, "vulnerable", "1.14.0"),

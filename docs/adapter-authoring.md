@@ -17,6 +17,8 @@ version_from_stats(stats)      # str | None
 service(target, service, limits)
 health(target)                 # (bool, detail)
 stats(target)                  # dict | None
+measurement()                  # MeasurementSpec (paths + payload reader)
+intelligence()                 # IntelligenceSpec (OSV/GitHub coordinates)
 ```
 
 The orchestrator, provenance recorder, validator, and CLI do not import a
@@ -48,7 +50,12 @@ Bandit's two-port `/admin/stats` assumption.
 - Loopback-only published ports.
 - Resource caps, read-only root, dropped capabilities, no restart.
 - Image/build labels for provenance.
-- No arbitrary host/port input from a probe.
+- Dynamic endpoints: the adapter writes `base_url`/`admin_url` into the
+  runtime, and the probe reads them from there. Do not require a fixed
+  host/port or a `config/research.yaml` target.
+- The measurement contract is not fully adapter-owned yet; see
+  [`package-lifecycle.md`](package-lifecycle.md#5-adding-a-target-adapter) for
+  the current stats/observation assumptions.
 
 ## Test
 
