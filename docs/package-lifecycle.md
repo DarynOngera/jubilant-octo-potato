@@ -270,6 +270,7 @@ health(target) -> (bool, detail)
 stats(target) -> dict | None
 measurement() -> MeasurementSpec
 intelligence() -> IntelligenceSpec
+container_ports() -> (app_port, admin_port | None)
 ```
 
 `service()` must return a Compose mapping with at least:

@@ -75,6 +75,9 @@ class UIServerTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn("csrf_token", session)
         self.assertFalse(session["read_only"])
+        self.assertTrue(session["version"])
+        self.assertIn("git", session)
+        self.assertTrue(session["started_at"])
         self.assertIn("default-src 'self'", headers["Content-Security-Policy"])
         self.assertEqual(headers["X-Content-Type-Options"], "nosniff")
 
@@ -248,6 +251,68 @@ class ActionRegistryTests(unittest.TestCase):
             build_command("poc_run", CVE, {"role": "patched"}),
             ["poc", "run", CVE, "--role", "patched"],
         )
+
+    def test_new_command_builders(self):
+        self.assertEqual(
+            build_command(
+                "ingest",
+                None,
+                {
+                    "target": "bandit",
+                    "refresh": True,
+                    "offline": False,
+                    "raw": "",
+                    "apply": False,
+                },
+            ),
+            ["ingest", "bandit", "--refresh"],
+        )
+        self.assertEqual(
+            build_command("analyze", CVE, {"refresh": True}),
+            ["analyze", CVE, "--refresh"],
+        )
+        self.assertEqual(
+            build_command("triage_run", None, {"from_packages": True}),
+            ["triage", "--from-packages"],
+        )
+        self.assertEqual(build_command("doctor", None, {}), ["doctor"])
+        self.assertEqual(
+            build_command("clean", None, {"dry_run": True}),
+            ["clean", "--dry-run"],
+        )
+        self.assertEqual(build_command("clean", None, {"dry_run": False}), ["clean"])
+
+    def test_ingest_target_is_validated(self):
+        spec, options, argv = validate_request(
+            "ingest",
+            None,
+            {"target": "bandit", "refresh": True},
+            {CVE},
+            {"CVE-2026-108525"},
+            {"bandit"},
+        )
+        self.assertEqual(spec.id, "ingest")
+        self.assertEqual(argv, ["ingest", "bandit", "--refresh"])
+        with self.assertRaises(ValueError):
+            validate_request(
+                "ingest",
+                None,
+                {"target": "missing"},
+                {CVE},
+                {"CVE-2026-108525"},
+                {"bandit"},
+            )
+
+    def test_actions_payload_exposes_target_choices(self):
+        payload = actions_payload(
+            known_cves={CVE},
+            known_catalog={"CVE-2026-108525"},
+            known_targets={"bandit", "toy"},
+            docker_ok=True,
+            read_only=False,
+        )
+        ingest = next(item for item in payload if item["id"] == "ingest")
+        self.assertEqual(ingest["options"]["target"]["choices"], ["bandit", "toy"])
 
     def test_scaffold_action_uses_catalog_cve(self):
         self.assertEqual(

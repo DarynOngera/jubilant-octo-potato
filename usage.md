@@ -198,8 +198,8 @@ Pages:
 - **Health** — the same checks as `vulnforge doctor`.
 
 Actions are restricted to an allowlist: `package scaffold`, `lab build|start|stop`,
-`validate`, `poc run`, `detect`, `report`, `package validate`, and
-`triage --check`. Actions that are not ready are disabled with the reason
+`validate`, `poc run`, `detect`, `report`, `package validate`, `analyze`,
+`ingest`, `triage`, `doctor`, and `clean`. Actions that are not ready are disabled with the reason
 (“Start the lab and implement the probe first”, “Run validation before
 detection”, etc.). Jobs run one at a time through the installed `vulnforge`
 CLI, never through a shell. The
@@ -326,7 +326,7 @@ Typical full regeneration:
 ## 2. Tests and detection self-test
 
 ```bash
-# All Python unit tests (136 currently; 2 Docker integration tests skipped by default)
+# All Python unit tests (139 currently; 2 Docker integration tests skipped by default)
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 
 # Lint

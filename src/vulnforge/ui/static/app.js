@@ -195,6 +195,9 @@
           ${actionButton("report", cve, "Generate report")}
           ${actionButton("package_validate", cve, "Check package")}
         </span>
+        <span class="action-group"><span>Intelligence</span>
+          ${actionButton("analyze", cve, "Analyze commits")}
+        </span>
       </div>`;
   }
 
@@ -704,17 +707,22 @@
           <td>${service.healthy === undefined ? "—" : service.healthy ? badge("healthy", "ok") : badge("unhealthy", "bad")}</td>
           <td class="mono">${esc(service.base_url || "")}</td>
           <td class="mono">${esc(service.admin_url || "")}</td>
+          <td class="mono">${esc(service.image || service.image_tag || "")}<br><span class="muted">${esc(service.image_id || "")}</span></td>
         </tr>`).join("");
+      const build = lab.build || {};
+      const buildGit = build.git || {};
       return `<section class="card">
         <div class="card-head"><h2 class="mono">${esc(lab.cve)}</h2>${lab.running ? badge("running", "ok") : badge("stopped", "neutral")}</div>
         <dl class="kv">
           <dt>Lab</dt><dd class="mono">${dash(lab.lab_id)}</dd>
           <dt>Runtime file</dt><dd>${lab.configured ? badge("present", "ok") : badge("missing", "neutral")}</dd>
           <dt>Created</dt><dd>${fmtDate(lab.created_at)}</dd>
+          <dt>Build commit</dt><dd class="mono">${dash(buildGit.commit)} ${buildGit.dirty === true ? badge("dirty", "warn") : buildGit.dirty === false ? badge("clean", "ok") : ""}</dd>
+          <dt>Provenance</dt><dd>${fmtDate(build.generated_at)}</dd>
         </dl>
         ${lab.error ? `<div class="callout bad">${esc(lab.error)}</div>` : ""}
         ${services ? `<div class="table-wrap" style="margin-top:12px"><table>
-          <thead><tr><th>Role</th><th>Version</th><th>Container</th><th>Health</th><th>App URL</th><th>Admin URL</th></tr></thead>
+          <thead><tr><th>Role</th><th>Version</th><th>Container</th><th>Health</th><th>App URL</th><th>Admin URL</th><th>Image</th></tr></thead>
           <tbody>${services}</tbody>
         </table></div>` : empty("No runtime services recorded.")}
         <div class="next-action-row">${pkg ? nextAction(pkg) : ""}</div>
@@ -805,8 +813,10 @@
         <div><div class="eyebrow">Actions</div><h1>Activity</h1><p>One job runs at a time. Logs stream from the real CLI invocation.</p></div>
         <div class="actions">
           <button class="btn small" data-action="refresh-jobs">Refresh</button>
-          ${actionButton("package_validate", "", "Check packages")}
+          ${actionButton("ingest", "", "Ingest intelligence")}
+          ${actionButton("triage_run", "", "Regenerate triage")}
           ${actionButton("triage_check", "", "Check triage")}
+          ${actionButton("package_validate", "", "Check packages")}
         </div>
       </div>
       <section class="card">
@@ -892,7 +902,11 @@
     main.innerHTML = `
       <div class="page-head">
         <div><div class="eyebrow">Environment</div><h1>Health</h1><p>Checks used by <code>vulnforge doctor</code>.</p></div>
-        <div class="actions"><button class="btn small" data-action="refresh-doctor">Refresh</button></div>
+        <div class="actions">
+          ${actionButton("doctor", "", "Run doctor")}
+          ${actionButton("clean", "", "Clean runtime")}
+          <button class="btn small" data-action="refresh-doctor">Refresh</button>
+        </div>
       </div>
       <section class="card">
         <div class="table-wrap"><table>
@@ -968,10 +982,13 @@
     const writes = (action.writes || []).length
       ? `<div class="callout"><strong>Writes:</strong> ${action.writes.map((item) => `<code>${esc(item)}</code>`).join(" ")}</div>`
       : "";
+    const confirmText = action.confirm || "This action changes tracked files.";
     const destructive = action.destructive
-      ? `<div class="callout bad"><strong>Destructive:</strong> this stops and removes the lab containers and network.</div>
-         <div class="field"><label><input type="checkbox" name="confirm" required> I understand this will remove the lab runtime.</label></div>`
-      : "";
+      ? `<div class="callout bad"><strong>Confirm:</strong> ${esc(confirmText)}</div>
+         <div class="field"><label><input type="checkbox" name="confirm" required> I understand what this command writes.</label></div>`
+      : action.confirm
+        ? `<div class="callout warn"><strong>Note:</strong> ${esc(action.confirm)}</div>`
+        : "";
     modalBody.innerHTML = `
       <p class="muted">${esc(action.description)}</p>
       <form id="action-form" data-action-id="${esc(action.id)}">
@@ -991,8 +1008,13 @@
       const data = new FormData(form);
       const options = {};
       Object.keys(action.options || {}).forEach((name) => {
+        const meta = action.options[name] || {};
         const value = data.get(`option-${name}`);
-        if (value !== null && value !== "") options[name] = value;
+        if (meta.type === "bool") {
+          options[name] = value === "on";
+        } else if (value !== null && value !== "") {
+          options[name] = value;
+        }
       });
       const selectedCve = data.get("cve");
       try {
@@ -1073,6 +1095,11 @@
       const indicator = document.getElementById("mode-indicator");
       indicator.textContent = state.session.read_only ? "read-only" : "actions enabled";
       indicator.className = `mode ${state.session.read_only ? "readonly" : "live"}`;
+      const git = state.session.git || {};
+      const commit = git.commit ? String(git.commit).slice(0, 12) : "unknown";
+      const dirty = git.dirty === true ? "dirty" : git.dirty === false ? "clean" : "";
+      document.getElementById("build-info").textContent =
+        `vulnforge ${state.session.version || "?"} · ${commit}${dirty ? ` (${dirty})` : ""}`;
       document.getElementById("root-path").textContent = state.session.root;
       state.actions = await api("/api/actions");
     } catch (error) {

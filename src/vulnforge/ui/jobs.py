@@ -32,11 +32,114 @@ class ActionSpec:
     cve_source: str = "packages"
     requires_docker: bool = False
     destructive: bool = False
+    confirm: str | None = None
     writes: tuple[str, ...] = ()
     options: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 ACTIONS: dict[str, ActionSpec] = {
+    "ingest": ActionSpec(
+        id="ingest",
+        label="Ingest intelligence",
+        description="Fetch/normalize OSV advisories and propose a catalog diff.",
+        category="intelligence",
+        cve_allowed=False,
+        destructive=True,
+        confirm="Apply rewrites data/advisories.json. Leave apply unchecked for a dry-run proposal.",
+        writes=("data/raw/osv/", "data/proposed/", "data/advisories.json (with apply)"),
+        options={
+            "target": {
+                "type": "enum",
+                "choices_from": "targets",
+                "choices": [],
+                "default": "bandit",
+                "label": "Target",
+            },
+            "refresh": {
+                "type": "bool",
+                "default": False,
+                "label": "Refresh from network",
+            },
+            "offline": {
+                "type": "bool",
+                "default": False,
+                "label": "Use an offline snapshot",
+            },
+            "raw": {
+                "type": "text",
+                "default": "",
+                "label": "Snapshot path (with offline)",
+            },
+            "apply": {
+                "type": "bool",
+                "default": False,
+                "label": "Apply the merged catalog",
+            },
+        },
+    ),
+    "analyze": ActionSpec(
+        id="analyze",
+        label="Analyze commits",
+        description="Capture fixing-commit patches and regenerate the root-cause scaffold.",
+        category="intelligence",
+        cve_required=True,
+        writes=("analysis/commits/", "analysis/root-cause.generated.md"),
+        options={
+            "refresh": {
+                "type": "bool",
+                "default": False,
+                "label": "Refresh cached patches from network",
+            }
+        },
+    ),
+    "triage_run": ActionSpec(
+        id="triage_run",
+        label="Regenerate triage",
+        description="Regenerate version exposure, checkpoints, priority matrix, and CSV.",
+        category="intelligence",
+        cve_allowed=False,
+        destructive=True,
+        confirm="This rewrites the generated triage artifacts and may rewrite the catalog with --from-packages.",
+        writes=(
+            "data/version-cve-map.json",
+            "data/lab-checkpoints.json",
+            "data/vulnerability-matrix.json",
+            "reports/vulnerability-matrix.csv",
+            "data/advisories.json (with --from-packages)",
+        ),
+        options={
+            "from_packages": {
+                "type": "bool",
+                "default": False,
+                "label": "Overlay packaged advisories first",
+            }
+        },
+    ),
+    "doctor": ActionSpec(
+        id="doctor",
+        label="Run doctor",
+        description="Check Python, Docker, config, schemas, and packages.",
+        category="system",
+        cve_allowed=False,
+        writes=("no tracked files",),
+    ),
+    "clean": ActionSpec(
+        id="clean",
+        label="Clean runtime",
+        description="Remove .vulnforge runtime state. Dry-run is the default.",
+        category="system",
+        cve_allowed=False,
+        destructive=True,
+        confirm="Without dry-run this removes .vulnforge runtime state, including lab runtime files.",
+        writes=(".vulnforge/",),
+        options={
+            "dry_run": {
+                "type": "bool",
+                "default": True,
+                "label": "Dry run only",
+            }
+        },
+    ),
     "package_scaffold": ActionSpec(
         id="package_scaffold",
         label="Scaffold package",
@@ -167,6 +270,31 @@ ACTIONS: dict[str, ActionSpec] = {
 
 
 def build_command(action_id: str, cve: str | None, options: dict[str, Any]) -> list[str]:
+    if action_id == "ingest":
+        argv = ["ingest", str(options.get("target") or "bandit")]
+        if options.get("refresh"):
+            argv.append("--refresh")
+        if options.get("offline"):
+            argv.append("--offline")
+        if options.get("raw"):
+            argv.extend(["--raw", str(options["raw"])])
+        if options.get("apply"):
+            argv.append("--apply")
+        return argv
+    if action_id == "analyze":
+        argv = ["analyze", _cve(cve)]
+        if options.get("refresh"):
+            argv.append("--refresh")
+        return argv
+    if action_id == "triage_run":
+        argv = ["triage"]
+        if options.get("from_packages"):
+            argv.append("--from-packages")
+        return argv
+    if action_id == "doctor":
+        return ["doctor"]
+    if action_id == "clean":
+        return ["clean", "--dry-run"] if options.get("dry_run", True) else ["clean"]
     if action_id == "package_scaffold":
         argv = ["package", "scaffold", _cve(cve)]
         target = options.get("target")
@@ -217,6 +345,7 @@ def validate_request(
     options: dict[str, Any] | None,
     known_cves: set[str],
     known_catalog: set[str] | None = None,
+    known_targets: set[str] | None = None,
 ) -> tuple[ActionSpec, dict[str, Any], list[str]]:
     spec = ACTIONS.get(action_id)
     if spec is None:
@@ -256,9 +385,14 @@ def validate_request(
                 )
             options[name] = number
         elif meta["type"] == "enum":
-            if value not in meta["choices"]:
+            choices = (
+                sorted(known_targets or set())
+                if meta.get("choices_from") == "targets"
+                else list(meta.get("choices", []))
+            )
+            if value not in choices:
                 raise ValueError(
-                    f"{name} must be one of: {', '.join(meta['choices'])}"
+                    f"{name} must be one of: {', '.join(choices)}"
                 )
             options[name] = value
         elif meta["type"] == "text":
@@ -353,9 +487,10 @@ class JobManager:
         options: dict[str, Any] | None,
         known_cves: set[str],
         known_catalog: set[str] | None = None,
+        known_targets: set[str] | None = None,
     ) -> dict[str, Any]:
         spec, options, argv = validate_request(
-            action_id, cve, options, known_cves, known_catalog
+            action_id, cve, options, known_cves, known_catalog, known_targets
         )
         job_id = secrets.token_hex(8)
         now = _now()
@@ -404,6 +539,7 @@ def actions_payload(
     *,
     known_cves: set[str],
     known_catalog: set[str] | None = None,
+    known_targets: set[str] | None = None,
     docker_ok: bool,
     read_only: bool,
 ) -> list[dict[str, Any]]:
@@ -431,7 +567,18 @@ def actions_payload(
                 "requires_docker": spec.requires_docker,
                 "destructive": spec.destructive,
                 "writes": list(spec.writes),
-                "options": spec.options,
+                "options": {
+                    key: (
+                        {
+                            **meta,
+                            "choices": sorted(known_targets or set()),
+                        }
+                        if meta.get("choices_from") == "targets"
+                        else meta
+                    )
+                    for key, meta in spec.options.items()
+                },
+                "confirm": spec.confirm,
                 "enabled": reason is None,
                 "disabled_reason": reason,
                 "known_cves": available_cves,

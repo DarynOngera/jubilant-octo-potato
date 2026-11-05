@@ -340,6 +340,9 @@ def labs(cfg: FactoryConfig, paths: Paths) -> list[dict[str, Any]]:
     results: list[dict[str, Any]] = []
     for pkg in packages:
         runtime_path = paths.root / ".vulnforge" / "labs" / pkg.cve / "runtime.json"
+        provenance_path = pkg.root / "lab" / "provenance.json"
+        provenance = _read_json(provenance_path) or {}
+        build = provenance.get("build") or {}
         item: dict[str, Any] = {
             "cve": pkg.cve,
             "configured": runtime_path.is_file(),
@@ -348,6 +351,12 @@ def labs(cfg: FactoryConfig, paths: Paths) -> list[dict[str, Any]]:
             "created_at": None,
             "services": {},
             "error": None,
+            "build": {
+                "git": build.get("git") or {},
+                "generated_at": provenance.get("generated_at"),
+                "base_image": build.get("base_image"),
+                "images": provenance.get("images") or {},
+            },
         }
         if not runtime_path.is_file():
             results.append(item)

@@ -19,6 +19,7 @@ health(target)                 # (bool, detail)
 stats(target)                  # dict | None
 measurement()                  # MeasurementSpec (paths + payload reader)
 intelligence()                 # IntelligenceSpec (OSV/GitHub coordinates)
+container_ports()              # (app container port, admin container port | None)
 ```
 
 The orchestrator, provenance recorder, validator, and CLI do not import a

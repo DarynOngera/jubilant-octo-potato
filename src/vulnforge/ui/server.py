@@ -4,13 +4,16 @@ from __future__ import annotations
 import json
 import mimetypes
 import secrets
+from datetime import datetime, timezone
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
 
+from .. import __version__
 from ..config import FactoryConfig
+from ..lab import provenance
 from ..packages import discover_package_dirs
 from ..paths import Paths
 from . import readmodel
@@ -37,9 +40,14 @@ class UIApp:
         self.jobs = job_manager or JobManager(cfg, paths)
         self.static_dir = static_dir or STATIC_DIR
         self.csrf_token = secrets.token_urlsafe(32)
+        self.started_at = datetime.now(timezone.utc).isoformat()
+        self.git = provenance.git_state(cfg.root)
 
     def known_cves(self) -> set[str]:
         return {path.name for path in discover_package_dirs(self.paths)}
+
+    def known_targets(self) -> set[str]:
+        return set(self.cfg.targets)
 
     def known_advisories(self) -> set[str]:
         catalog_path = self.paths.data / "advisories.json"
@@ -226,6 +234,7 @@ class UIHandler(BaseHTTPRequestHandler):
                 options,
                 self.app.known_cves(),
                 self.app.known_advisories(),
+                self.app.known_targets(),
             )
         except ValueError as exc:
             self._error(HTTPStatus.BAD_REQUEST, str(exc))
@@ -254,6 +263,9 @@ class UIHandler(BaseHTTPRequestHandler):
                     "csrf_token": app.csrf_token,
                     "read_only": app.read_only,
                     "root": str(app.paths.root),
+                    "version": __version__,
+                    "git": app.git,
+                    "started_at": app.started_at,
                 }
             )
             return
@@ -277,6 +289,7 @@ class UIHandler(BaseHTTPRequestHandler):
                 actions_payload(
                     known_cves=app.known_cves(),
                     known_catalog=app.known_advisories(),
+                    known_targets=app.known_targets(),
                     docker_ok=readmodel.docker_ready(app.paths),
                     read_only=app.read_only,
                 )

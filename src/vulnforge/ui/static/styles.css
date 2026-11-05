@@ -70,6 +70,7 @@ small { color: var(--muted); }
 .mode { text-transform: uppercase; letter-spacing: .08em; font-size: .68rem; }
 .mode.live { color: var(--ok); }
 .mode.readonly { color: var(--warn); }
+.build-info { font-family: var(--mono); font-size: .68rem; color: var(--muted); }
 .root-path { font-family: var(--mono); font-size: .68rem; overflow-wrap: anywhere; }
 .docs-link { color: var(--muted); }
 
