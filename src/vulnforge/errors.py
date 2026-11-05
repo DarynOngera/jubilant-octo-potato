@@ -15,3 +15,7 @@ class PackageError(VulnForgeError):
 
 class SchemaError(VulnForgeError):
     """A schema or instance could not be validated."""
+
+
+class LabError(VulnForgeError):
+    """A lab could not be planned, built, started, or stopped."""

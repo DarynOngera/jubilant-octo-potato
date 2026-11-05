@@ -30,6 +30,7 @@ class SchemaTests(unittest.TestCase):
             ("exploitability", PACKAGE / "analysis" / "exploitability.json"),
             ("detection-spec", PACKAGE / "detection" / "spec.json"),
             ("evidence", PACKAGE / "evidence" / "execution.json"),
+            ("provenance", PACKAGE / "lab" / "provenance.json"),
         ]
         for schema_name, path in checks:
             with self.subTest(path=path.name):

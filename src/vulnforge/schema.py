@@ -21,6 +21,7 @@ SCHEMA_FILES = {
     "detection-spec": "detection-spec.schema.json",
     "evidence": "evidence.schema.json",
     "exploitability": "exploitability.schema.json",
+    "provenance": "provenance.schema.json",
 }
 
 

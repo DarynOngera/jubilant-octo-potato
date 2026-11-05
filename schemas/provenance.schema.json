@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vulnforge.local/schemas/provenance.schema.json",
+  "title": "VulnForge Image/Build Provenance",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "cve", "target", "generated_at", "build", "images"],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "cve": {"type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"},
+    "target": {"type": "string", "minLength": 1},
+    "generated_at": {"type": "string", "minLength": 1},
+    "build": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["app_dir", "dockerfile", "base_image", "lockfiles", "build_args", "git"],
+      "properties": {
+        "app_dir": {"type": "string"},
+        "dockerfile": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["path", "sha256"],
+          "properties": {
+            "path": {"type": "string"},
+            "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+          }
+        },
+        "base_image": {"type": "string", "minLength": 1},
+        "lockfiles": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["path", "sha256"],
+            "properties": {
+              "path": {"type": "string"},
+              "sha256": {"type": "string", "pattern": "^[a-f0-9]{64}$"}
+            }
+          }
+        },
+        "build_args": {"type": "object"},
+        "git": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "commit": {"type": ["string", "null"]},
+            "dirty": {"type": ["boolean", "null"]}
+          }
+        }
+      }
+    },
+    "images": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["tag", "id", "repo_digests", "labels"],
+        "properties": {
+          "tag": {"type": "string"},
+          "id": {"type": ["string", "null"]},
+          "repo_digests": {"type": "array", "items": {"type": "string"}},
+          "created": {"type": ["string", "null"]},
+          "architecture": {"type": ["string", "null"]},
+          "os": {"type": ["string", "null"]},
+          "size": {"type": ["integer", "null"]},
+          "labels": {"type": "object"}
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  }
+}

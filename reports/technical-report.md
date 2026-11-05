@@ -441,6 +441,8 @@ Latest live A/B results (`evidence/metrics/regression-results.json`):
 
 A non-`CONFIRMED` verdict is a real result, not a reporting gap: `compare_versions.py` exits non-zero for `INCONCLUSIVE` and `FAIL` because a probe that stops reproducing is as important as a patch that does not hold.
 
+These are single-run measurements from the pre-factory harness. The VulnForge M3 validator will replace them with repeated runs, medians, and a variance guard; treat any single run as provisional.
+
 The next-highest-priority item that is still vulnerable at the lab's `1.13.1` checkpoint is **CVE-2026-108525** (HTTP/2 inbound flow control is not enforced, letting a client queue unbounded DATA in stream processes in Bandit). Add its probe module under `probes/`, register it in `probes/registry.py`, and re-run `tests/regression/compare_versions.py`.
 
 12 remaining advisories are fixed before `1.13.1` (for example CVE-2026-39803, CVE-2026-39806, CVE-2026-105659, CVE-2026-42786) and cannot be reproduced against the current "vulnerable" container. Add the corresponding older checkpoint version from `data/lab-checkpoints.json` before implementing those PoCs.

@@ -12,7 +12,8 @@ CVE-XXXX-XXXXX/
 │   └── attack-surface.md
 ├── lab/
 │   ├── lab.json           # versions, targets, limits
-│   └── compose.yaml       # rendered/generated lab (M2)
+│   ├── compose.yaml       # manual fallback (fixed ports)
+│   └── provenance.json    # generated: base digest, lock hashes, image IDs
 ├── poc/
 │   ├── manifest.json      # entrypoint, target roles, metric, thresholds
 │   ├── exploit.py         # run(target, **kwargs)
@@ -51,13 +52,29 @@ global catalog a generated index.
 
 The validator enforces:
 
-- schemas for advisory, package, lab, and probe;
+- schemas for advisory, package, lab, probe, detection spec, evidence, and
+  exploitability;
 - CVE consistency across directory, manifest, advisory, lab, and probe;
 - versions matching between manifest, lab, and the first fixed release;
 - vulnerable/patched target roles existing and matching the probe;
 - required analysis, detection, evidence, and test paths;
+- `lab/compose.yaml` exists (manual fallback) and `lab/provenance.json` is
+  schema-valid when present;
 - `status: validated` implies `last_verdict: CONFIRMED`;
 - advisory drift against `data/advisories.json`.
+
+## Lab lifecycle
+
+```bash
+vulnforge lab build <CVE>
+vulnforge lab start <CVE>
+vulnforge lab status <CVE>
+vulnforge lab stop <CVE>
+```
+
+The orchestrator allocates free loopback ports, namespaces the Compose project
+and containers per CVE, builds with per-version lockfiles, and records image
+provenance in the package's `lab/provenance.json`.
 
 ## Current packages
 

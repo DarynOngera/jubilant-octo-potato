@@ -73,9 +73,12 @@ The regression command exits non-zero unless **every** probe is
 | `tests/regression/compare_versions.py` | Runs each PoC against its A/B pair |
 | `tests/detection/thresholds.py` | Four behavioral detection rules + self-test |
 | `tests/test_version_resolver.py` | 18 range/parser/checkpoint unit tests |
-| `tests/test_package_model.py` etc. | Package, CLI, schema, and golden tests |
+| `tests/test_package_model.py` etc. | Package, CLI, schema, lab-plan, and golden tests |
 | `lab/app/` | Version-parameterized Plug/Bandit target image |
-| `lab/compose.yaml` | Three targets, resource caps, loopback ports |
+| `lab/app/locks/` | Per-version `mix.lock` files for reproducible builds |
+| `lab/compose.yaml` | Manual fixed-port lab (three targets, resource caps) |
+| `.vulnforge/` | Generated runtime compose/runtime state (gitignored) |
+| `vulnerabilities/<CVE>/lab/provenance.json` | Base digest, lock hashes, image IDs, git revision |
 | `config/research.yaml` | Target URLs and pinned versions |
 | `config/vulnforge.yaml` | Factory paths, validation defaults, target adapters |
 | `config/lab-limits.yaml` | Isolation rules, resource and experiment budgets |
@@ -86,7 +89,7 @@ Generated artifacts should not be hand-edited; re-run the generator.
 
 ---
 
-## VulnForge factory CLI (M1)
+## VulnForge factory CLI (M1/M2)
 
 The factory package is installed editable with `pip install -e '.[dev]'`.
 It is also runnable as `python -m vulnforge`.
@@ -105,34 +108,44 @@ vulnforge package show CVE-2026-116078 --json
 vulnforge package validate
 vulnforge package validate CVE-2026-116078
 vulnforge package validate --all --json
+
+# Lab lifecycle (M2): dynamic loopback ports + provenance
+vulnforge lab build CVE-2026-116078
+vulnforge lab start CVE-2026-116078
+vulnforge lab status CVE-2026-116078
+vulnforge lab status CVE-2026-116078 --json
+vulnforge lab stop CVE-2026-116078
 ```
 
 `vulnforge package validate` checks:
 
-- JSON Schema conformance for advisory, package, lab, and probe manifests;
+- JSON Schema conformance for advisory, package, lab, probe, detection spec,
+  evidence, exploitability, and provenance;
 - CVE consistency across directory name, package manifest, advisory, lab, and
   probe;
 - vulnerable/patched versions matching between the manifest and lab, and
   `patched == first_fixed` (M1 rule);
 - lab target roles existing and matching the probe's target names;
 - required analysis, detection, evidence, and test paths;
+- `lab/compose.yaml` exists and `lab/provenance.json` is schema-valid when
+  present;
 - `status: validated` agreeing with `last_verdict: CONFIRMED`;
 - the package advisory being in sync with `data/advisories.json`.
 
-The remaining factory commands are explicit M1 stubs:
+The remaining factory commands are explicit stubs:
 
 | Command | Planned milestone |
 |---|---|
-| `vulnforge triage` | M2 |
-| `vulnforge lab` | M2 |
+| `vulnforge triage` | M2 (version-plan extraction) |
 | `vulnforge poc` | M3 |
 | `vulnforge validate` | M3 |
 | `vulnforge detect` | M4 |
 | `vulnforge report` | M4 |
 | `vulnforge ingest` | M5 |
 
-They exit `2` with a message naming the milestone; they do not silently do
-nothing. See `docs/vulnforge-architecture.md` for the full design.
+`vulnforge lab` is implemented in M2. The stubs exit `2` with a message naming
+the milestone; they do not silently do nothing. See
+`docs/vulnforge-architecture.md` for the full design.
 
 ### Package layout
 
@@ -235,8 +248,11 @@ Typical full regeneration:
 ## 2. Tests and detection self-test
 
 ```bash
-# All Python unit tests (45 currently)
+# All Python unit tests (52 currently; 1 Docker integration test skipped by default)
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
+
+# Real Docker build/start/status/stop for the first package
+VULNFORGE_DOCKER=1 .venv/bin/python -m unittest tests.test_lab_integration -v
 
 # Single file
 .venv/bin/python tests/test_version_resolver.py
@@ -283,6 +299,37 @@ done
 
 Expected versions: `1.13.1`, `1.14.0`, `1.14.1`. The idle VM baseline
 should be ~50 MiB, not gigabytes.
+
+### Orchestrated package labs (M2)
+
+For a single vulnerability package, use the factory instead of the fixed-port
+repository Compose file:
+
+```bash
+vulnforge lab build CVE-2026-116078
+vulnforge lab start CVE-2026-116078
+vulnforge lab status CVE-2026-116078
+vulnforge lab stop CVE-2026-116078
+```
+
+The orchestrator:
+
+- allocates free `127.0.0.1` ports for each target;
+- writes the generated Compose file and runtime URLs under
+  `.vulnforge/labs/<cve>/`;
+- namespaces the Compose project, network, containers, and image tags per CVE;
+- builds with `lab/app/locks/mix-<version>.lock` and the digest-pinned base
+  image;
+- waits for `/healthz` and verifies `/stats` reports the expected Bandit
+  version;
+- records `vulnerabilities/<cve>/lab/provenance.json` with the Dockerfile hash,
+  base image, lockfile hashes, build args, OCI labels, image IDs, and git
+  revision.
+
+`vulnforge lab status --json` prints the dynamic app/admin URLs and per-target
+health/version state. The existing `config/research.yaml` targets still point at
+the fixed-port repository lab (4100/4110/4120); probe-to-runtime wiring lands in
+M3.
 
 ### Lab constraints you must not remove
 
@@ -383,6 +430,11 @@ CVE-2026-111101 is implemented but **not** a confirmed finding. At 20k
 chunks with pacing, both 1.13.1 and 1.14.1 grow by megabytes against the
 large-chunk control, so the current metric does not isolate the 1.14.0
 fix. See `reports/lab-runtime-fixes.md`.
+
+These are single-run measurements. A later single run of 116078 returned
+patched 2.71x (a `FAIL` under the single-run predicate), while a three-run
+dynamic-lab sample gave patched median 0.72x. M3 replaces single runs with
+medians and a variance guard; treat any single run as provisional.
 
 ---
 
