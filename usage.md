@@ -326,7 +326,7 @@ Typical full regeneration:
 ## 2. Tests and detection self-test
 
 ```bash
-# All Python unit tests (140 currently; 2 Docker integration tests skipped by default)
+# All Python unit tests (141 currently; 2 Docker integration tests skipped by default)
 .venv/bin/python -m unittest discover -s tests -p 'test_*.py'
 
 # Lint

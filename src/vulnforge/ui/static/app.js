@@ -253,6 +253,18 @@
     return state.matrix;
   }
 
+  async function refreshActions() {
+    state.actions = await api("/api/actions");
+    return state.actions;
+  }
+
+  async function ensureActionsForCve(cve) {
+    const validate = state.actions.find((item) => item.id === "validate");
+    if (!validate || !(validate.known_cves || []).includes(cve)) {
+      await refreshActions();
+    }
+  }
+
   async function renderOverview() {
     const [status, matrix] = await Promise.all([ensurePortfolio(), ensureMatrix()]);
     const counts = status.counts;
@@ -338,6 +350,7 @@
   // -- packages ---------------------------------------------------------
 
   async function renderPackages() {
+    await refreshActions();
     const status = await ensurePortfolio();
     const rows = status.packages.map((pkg) => `<tr>
       <td class="mono"><a href="${cveHref(pkg.cve)}">${esc(pkg.cve)}</a></td>
@@ -377,6 +390,7 @@
 
   async function renderCve(cve, tab) {
     if (!cve) { location.hash = "#/overview"; return; }
+    await ensureActionsForCve(cve);
     const detail = await api(`/api/packages/${encodeURIComponent(cve)}`);
     state.detail = detail;
     const summary = detail.summary;
@@ -695,6 +709,7 @@
   // -- labs -------------------------------------------------------------
 
   async function renderLabs() {
+    await refreshActions();
     const [labs] = await Promise.all([api("/api/labs"), ensurePortfolio()]);
     const docker = state.actions.find((item) => item.id === "lab_build");
     const cards = labs.map((lab) => {
@@ -821,11 +836,12 @@
       </div>
       <section class="card">
         ${jobs.length ? `<div class="table-wrap"><table>
-          <thead><tr><th>When</th><th>Action</th><th>CVE</th><th>Status</th><th>Result</th><th>Last line</th><th></th></tr></thead>
+          <thead><tr><th>When</th><th>Action</th><th>CVE</th><th>Command</th><th>Status</th><th>Result</th><th>Last line</th><th></th></tr></thead>
           <tbody>${jobs.map((job) => `<tr>
             <td class="nowrap">${fmtDate(job.created_at)}</td>
             <td>${esc(job.label)}</td>
             <td class="mono">${dash(job.cve)}</td>
+            <td class="mono muted">${esc(job.command || "")}</td>
             <td>${jobStatus(job)}</td>
             <td class="num">${job.returncode == null ? "—" : esc(job.returncode)}</td>
             <td class="mono muted">${job.last_line ? esc(job.last_line) : "—"}</td>
@@ -848,6 +864,10 @@
     state.poll = setInterval(async () => {
       try {
         state.jobs = await api("/api/jobs");
+        if (state.jobs.some((job) => job.action === "package_scaffold" && ["succeeded", "failed"].includes(job.status))) {
+          state.portfolio = null;
+          await refreshActions();
+        }
         if (state.modalOpen && state.modalJobId) {
           await updateJobModal();
         } else if (activePage() === "activity") {
@@ -942,14 +962,19 @@
     state.modalJobId = null;
     modalTitle.textContent = action.label;
 
-    const cveOptions = (action.known_cves || []).map((name) => `<option value="${esc(name)}" ${name === cve ? "selected" : ""}>${esc(name)}</option>`).join("");
+    const cveNames = [...(action.known_cves || [])];
+    if (cve && !cveNames.includes(cve)) cveNames.unshift(cve);
+    const cveOptions = cveNames.map((name) => `<option value="${esc(name)}" ${name === cve ? "selected" : ""}>${esc(name)}</option>`).join("");
     const cveField = action.cve_allowed ? `
       <div class="field">
-        <label for="action-cve">CVE</label>
+        <label for="action-cve">${action.cve_required ? "Target CVE" : "CVE"}</label>
         <select id="action-cve" name="cve" ${action.cve_required ? "required" : ""}>
-          ${action.cve_required ? "" : `<option value="" ${cve ? "" : "selected"}>— all packages —</option>`}
+          ${action.cve_required
+            ? `<option value="" disabled ${cve ? "" : "selected"}>— choose a CVE —</option>`
+            : `<option value="" ${cve ? "" : "selected"}>— all packages —</option>`}
           ${cveOptions}
         </select>
+        ${cve ? `<span class="hint">Opened from ${esc(cve)}</span>` : ""}
       </div>` : "";
     const optionFields = Object.entries(action.options || {}).map(([name, meta]) => {
       if (meta.type === "enum") {
@@ -1017,6 +1042,10 @@
         }
       });
       const selectedCve = data.get("cve");
+      if (action.cve_required && !selectedCve) {
+        toast("Choose a target CVE", true);
+        return;
+      }
       try {
         const job = await submitAction(action.id, selectedCve || null, options);
         closeModal();
@@ -1101,7 +1130,7 @@
       document.getElementById("build-info").textContent =
         `vulnforge ${state.session.version || "?"} · ${commit}${dirty ? ` (${dirty})` : ""}`;
       document.getElementById("root-path").textContent = state.session.root;
-      state.actions = await api("/api/actions");
+      await refreshActions();
     } catch (error) {
       main.innerHTML = `<div class="card"><h1>VulnForge UI unavailable</h1><p class="muted">${esc(error.message)}</p></div>`;
       return;

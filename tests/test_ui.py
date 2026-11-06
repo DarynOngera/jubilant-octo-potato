@@ -197,6 +197,17 @@ class UIServerTests(unittest.TestCase):
         self.assertEqual(status, 202)
         self.assertEqual(payload["action"], "package_scaffold")
 
+    def test_job_records_keep_distinct_cves(self):
+        jobs = JobManager(self.cfg, self.paths, runner=_fake_runner)
+        first = jobs.submit(
+            "validate", "CVE-2026-111101", {}, {"CVE-2026-111101", CVE}
+        )
+        second = jobs.submit("detect", CVE, {}, {"CVE-2026-111101", CVE})
+        self.assertEqual(first["cve"], "CVE-2026-111101")
+        self.assertEqual(second["cve"], CVE)
+        self.assertIn("CVE-2026-111101", " ".join(first["argv"]))
+        self.assertIn(CVE, " ".join(second["argv"]))
+
     def test_post_rejects_unknown_action_and_bad_cve(self):
         server = self.start()
         _, _, session = self.json_request(server, "GET", "/api/session")
