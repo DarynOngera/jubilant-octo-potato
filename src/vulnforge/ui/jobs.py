@@ -400,6 +400,12 @@ def validate_request(
         elif meta["type"] == "bool":
             options[name] = bool(value)
 
+    if action_id == "ingest":
+        if options.get("refresh") and options.get("offline"):
+            raise ValueError("refresh and offline are mutually exclusive")
+        if options.get("raw") and not options.get("offline"):
+            raise ValueError("raw requires offline")
+
     return spec, options, build_command(action_id, cve, options)
 
 
@@ -555,6 +561,8 @@ def actions_payload(
             if spec.cve_source == "catalog"
             else sorted(known_cves) if spec.cve_allowed else []
         )
+        if spec.cve_source == "catalog" and not available_cves and reason is None:
+            reason = "No unpackaged catalog advisories are available"
         payload.append(
             {
                 "id": spec.id,
