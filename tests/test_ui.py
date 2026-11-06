@@ -303,6 +303,26 @@ class ActionRegistryTests(unittest.TestCase):
                 {"bandit"},
             )
 
+    def test_ingest_rejects_conflicting_modes(self):
+        with self.assertRaises(ValueError):
+            validate_request(
+                "ingest",
+                None,
+                {"target": "bandit", "refresh": True, "offline": True},
+                {CVE},
+                set(),
+                {"bandit"},
+            )
+        with self.assertRaises(ValueError):
+            validate_request(
+                "ingest",
+                None,
+                {"target": "bandit", "raw": "snapshot.json"},
+                {CVE},
+                set(),
+                {"bandit"},
+            )
+
     def test_actions_payload_exposes_target_choices(self):
         payload = actions_payload(
             known_cves={CVE},
