@@ -20,6 +20,7 @@
     "verdict": {"enum": ["CONFIRMED", "FAIL", "INCONCLUSIVE", "ERROR"]},
     "reason": {"type": "string"},
     "runs": {"type": "integer", "minimum": 1},
+    "validation_id": {"type": "string", "minLength": 1},
     "started_at": {"type": "string"},
     "finished_at": {"type": "string"},
     "targets": {"type": "object"},

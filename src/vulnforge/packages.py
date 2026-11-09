@@ -2,8 +2,12 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
+
+from packaging.specifiers import InvalidSpecifier, SpecifierSet
+from packaging.version import InvalidVersion, Version
 
 from .contract import ANALYSIS_FILES, DETECTION_FILES, missing_artifacts
 from .errors import PackageError
@@ -41,7 +45,77 @@ def discover_package_dirs(paths: Paths) -> list[Path]:
 
 
 def package_path(package_root: Path, relative: str) -> Path:
-    return (package_root / relative).resolve()
+    """Resolve a package-relative path without allowing it to escape the package."""
+    root = package_root.resolve()
+    path = (root / relative).resolve()
+    try:
+        path.relative_to(root)
+    except ValueError as exc:
+        raise PackageError(
+            f"package path {relative!r} escapes package root {root}"
+        ) from exc
+    return path
+
+
+def _package_path(
+    package_root: Path, relative: str, label: str, errors: list[str]
+) -> Path:
+    """Return a safe package path and retain validation errors for the caller."""
+    try:
+        return package_path(package_root, relative)
+    except PackageError as exc:
+        errors.append(f"{label}: {exc}")
+        return package_root / ".invalid-package-path"
+
+
+def _version_in_affected_ranges(version: str, affected: Any) -> bool:
+    """Return whether a version is covered by a package/advisory range.
+
+    Package manifests accept the same range forms as the advisory schema: a
+    Hex-style expression, a list of expressions, or OSV-style introduced/fixed
+    objects.  ``or`` separates independent ranges; ``and`` joins constraints
+    within a range.
+    """
+    try:
+        candidate = Version(version)
+    except InvalidVersion:
+        return False
+
+    if isinstance(affected, dict):
+        introduced = affected.get("introduced")
+        fixed = affected.get("fixed")
+        try:
+            if introduced not in (None, "", "0") and candidate < Version(str(introduced)):
+                return False
+            if fixed not in (None, "") and candidate >= Version(str(fixed)):
+                return False
+        except InvalidVersion:
+            return False
+        return True
+
+    if isinstance(affected, (list, tuple)):
+        return any(_version_in_affected_ranges(version, item) for item in affected)
+
+    if not isinstance(affected, str):
+        return False
+
+    normalized = (
+        affected.replace("&gt;", ">")
+        .replace("&lt;", "<")
+        .replace("&amp;", "&")
+    )
+    for expression in re.split(r"\s+or\s+|\s*;\s*", normalized):
+        expression = re.sub(r"\s+and\s+", ",", expression.strip())
+        if not expression:
+            continue
+        if re.fullmatch(r"[0-9][0-9A-Za-z.\-+]*", expression):
+            expression = f"=={expression}"
+        try:
+            if candidate in SpecifierSet(expression):
+                return True
+        except InvalidSpecifier:
+            continue
+    return False
 
 
 def _check(condition: bool, message: str, errors: list[str]) -> None:
@@ -79,7 +153,11 @@ def load_package(package_root: Path, schemas_dir: Path) -> Package:
     lab_rel = manifest.paths.get("lab", "lab/lab.json") if manifest else "lab/lab.json"
     probe_rel = manifest.paths.get("poc", "poc/manifest.json") if manifest else "poc/manifest.json"
 
-    advisory_data = _load_json(package_root / advisory_rel, "advisory", pkg.errors)
+    advisory_data = _load_json(
+        _package_path(package_root, advisory_rel, "advisory", pkg.errors),
+        "advisory",
+        pkg.errors,
+    )
     if advisory_data is not None:
         pkg.errors.extend(
             validate_instance(
@@ -91,7 +169,11 @@ def load_package(package_root: Path, schemas_dir: Path) -> Package:
         except (KeyError, TypeError, ValueError) as exc:
             pkg.errors.append(f"advisory could not be parsed: {exc}")
 
-    lab_data = _load_json(package_root / lab_rel, "lab spec", pkg.errors)
+    lab_data = _load_json(
+        _package_path(package_root, lab_rel, "lab spec", pkg.errors),
+        "lab spec",
+        pkg.errors,
+    )
     if lab_data is not None:
         pkg.errors.extend(
             validate_instance(lab_data, schemas_dir, "lab", label=lab_rel)
@@ -101,7 +183,11 @@ def load_package(package_root: Path, schemas_dir: Path) -> Package:
         except (KeyError, TypeError, ValueError) as exc:
             pkg.errors.append(f"lab spec could not be parsed: {exc}")
 
-    probe_data = _load_json(package_root / probe_rel, "probe manifest", pkg.errors)
+    probe_data = _load_json(
+        _package_path(package_root, probe_rel, "probe manifest", pkg.errors),
+        "probe manifest",
+        pkg.errors,
+    )
     if probe_data is not None:
         pkg.errors.extend(
             validate_instance(
@@ -118,27 +204,52 @@ def load_package(package_root: Path, schemas_dir: Path) -> Package:
         # part of the package contract and must be schema-valid.
         artifact_checks = (
             (
-                package_root / manifest.paths.get("analysis", "analysis") / "exploitability.json",
+                _package_path(
+                    package_root,
+                    manifest.paths.get("analysis", "analysis"),
+                    "analysis directory",
+                    pkg.errors,
+                ) / "exploitability.json",
                 "exploitability",
                 "analysis/exploitability.json",
             ),
             (
-                package_root / manifest.paths.get("detection", "detection") / "spec.json",
+                _package_path(
+                    package_root,
+                    manifest.paths.get("detection", "detection"),
+                    "detection directory",
+                    pkg.errors,
+                ) / "spec.json",
                 "detection-spec",
                 "detection/spec.json",
             ),
             (
-                package_root / manifest.paths.get("detection", "detection") / "evidence.json",
+                _package_path(
+                    package_root,
+                    manifest.paths.get("detection", "detection"),
+                    "detection directory",
+                    pkg.errors,
+                ) / "evidence.json",
                 "detection",
                 "detection/evidence.json",
             ),
             (
-                package_root / manifest.paths.get("evidence", "evidence") / "execution.json",
+                _package_path(
+                    package_root,
+                    manifest.paths.get("evidence", "evidence"),
+                    "evidence directory",
+                    pkg.errors,
+                ) / "execution.json",
                 "evidence",
                 "evidence/execution.json",
             ),
             (
-                (package_root / manifest.paths.get("lab", "lab/lab.json")).parent
+                _package_path(
+                    package_root,
+                    manifest.paths.get("lab", "lab/lab.json"),
+                    "lab spec",
+                    pkg.errors,
+                ).parent
                 / "provenance.json",
                 "provenance",
                 "lab/provenance.json",
@@ -184,6 +295,17 @@ def check_package_consistency(pkg: Package) -> None:
             (
                 f"advisory fixed_in {pkg.advisory.fixed_in!r} does not include "
                 f"first_fixed {manifest.first_fixed!r}"
+            ),
+            errors,
+        )
+        _check(
+            _version_in_affected_ranges(
+                manifest.vulnerable_version,
+                pkg.advisory.affected_ranges or pkg.advisory.affected,
+            ),
+            (
+                f"vulnerable version {manifest.vulnerable_version!r} is not in "
+                f"the advisory affected range"
             ),
             errors,
         )
@@ -264,25 +386,28 @@ def check_package_consistency(pkg: Package) -> None:
         manifest.paths.get("lab", "lab/lab.json"),
         manifest.paths.get("poc", "poc/manifest.json"),
     ):
-        _check((pkg.root / rel).is_file(), f"referenced file is missing: {rel}", errors)
+        path = _package_path(pkg.root, rel, "referenced file", errors)
+        _check(path.is_file(), f"referenced file is missing: {rel}", errors)
 
     for directory, filenames in (
         (manifest.paths.get("analysis", "analysis"), REQUIRED_ANALYSIS_FILES),
         (manifest.paths.get("detection", "detection"), REQUIRED_DETECTION_FILES),
     ):
-        base = pkg.root / directory
+        base = _package_path(pkg.root, directory, "referenced directory", errors)
         _check(base.is_dir(), f"referenced directory is missing: {directory}", errors)
         for filename in filenames:
             _check((base / filename).is_file(), (
                 f"referenced file is missing: {directory}/{filename}"
             ), errors)
 
-    tests_dir = pkg.root / manifest.paths.get("tests", "tests")
+    tests_dir = _package_path(
+        pkg.root, manifest.paths.get("tests", "tests"), "tests directory", errors
+    )
     _check(tests_dir.is_dir(), f"referenced tests directory is missing: {tests_dir}", errors)
 
     report_rel = manifest.paths.get("report")
     if report_rel:
-        _check((pkg.root / report_rel).is_file(), (
+        _check(_package_path(pkg.root, report_rel, "report", errors).is_file(), (
             f"referenced report is missing: {report_rel}"
         ), errors)
 
@@ -299,7 +424,7 @@ def check_package_consistency(pkg: Package) -> None:
 
     evidence_rel = manifest.validation.get("evidence")
     if evidence_rel:
-        _check((pkg.root / evidence_rel).is_file(), (
+        _check(_package_path(pkg.root, evidence_rel, "validation evidence", errors).is_file(), (
             f"validation evidence is missing: {evidence_rel}"
         ), errors)
 

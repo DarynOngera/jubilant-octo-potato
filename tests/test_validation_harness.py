@@ -119,6 +119,14 @@ class HarnessTests(unittest.TestCase):
             self.assertEqual(
                 len(list((pkg_dir / "evidence" / "telemetry").glob("*.json"))), 6
             )
+            telemetry_path = pkg_dir / "evidence" / "telemetry" / "run-01-vulnerable.json"
+            telemetry = json.loads(telemetry_path.read_text())
+            self.assertEqual(
+                validate_instance(telemetry, paths.schemas, "telemetry"), []
+            )
+            self.assertEqual(telemetry["validation_id"], validation["validation_id"])
+            self.assertEqual(telemetry["role"], "vulnerable")
+            self.assertIn("attack", telemetry["telemetry"])
             manifest = json.loads((pkg_dir / "package.json").read_text())
             self.assertEqual(manifest["status"], "validated")
             self.assertEqual(manifest["validation"]["last_verdict"], "CONFIRMED")

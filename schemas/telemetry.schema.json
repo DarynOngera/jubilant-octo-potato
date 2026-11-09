@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vulnforge.local/schemas/telemetry.schema.json",
+  "title": "VulnForge Run Telemetry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "validation_id",
+    "cve",
+    "run",
+    "role",
+    "target",
+    "version",
+    "image",
+    "started_at",
+    "finished_at",
+    "telemetry"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "validation_id": {"type": "string", "minLength": 1},
+    "cve": {"type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"},
+    "run": {"type": "integer", "minimum": 1},
+    "role": {"enum": ["vulnerable", "patched"]},
+    "target": {"type": "string", "minLength": 1},
+    "version": {"type": "string", "minLength": 1},
+    "image": {"type": "string", "minLength": 1},
+    "started_at": {"type": "string", "minLength": 1},
+    "finished_at": {"type": "string", "minLength": 1},
+    "telemetry": {"type": "object"}
+  }
+}

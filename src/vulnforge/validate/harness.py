@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -338,6 +339,7 @@ def run_validation(
     telemetry_dir.mkdir(parents=True, exist_ok=True)
 
     started_at = datetime.now(timezone.utc).isoformat()
+    validation_id = uuid.uuid4().hex
     records: list[dict[str, Any]] = []
     errors: list[dict[str, Any]] = []
     aa_ratios: list[float] = []
@@ -347,7 +349,9 @@ def run_validation(
         for role in ROLES:
             target = targets[role]
             try:
+                run_started_at = datetime.now(timezone.utc).isoformat()
                 result = ProbeResult.coerce(probe(target, **kwargs))
+                run_finished_at = datetime.now(timezone.utc).isoformat()
                 metric = result.metrics.get(metric_name)
                 if metric is None:
                     raise LabError(
@@ -356,10 +360,15 @@ def run_validation(
                     )
                 run_metrics[role] = float(metric)
                 record = {
+                    "schema_version": "1.0",
+                    "validation_id": validation_id,
                     "run": run_index,
                     "role": role,
                     "target": target.name,
                     "version": runtime.services[role].version,
+                    "image": runtime.services[role].image_tag,
+                    "started_at": run_started_at,
+                    "finished_at": run_finished_at,
                     "metric_name": metric_name,
                     "metric": float(metric),
                     "metrics": result.metrics,
@@ -375,7 +384,19 @@ def run_validation(
                 if telemetry is not None:
                     _write_json(
                         telemetry_dir / f"run-{run_index:02d}-{role}.json",
-                        telemetry,
+                        {
+                            "schema_version": "1.0",
+                            "validation_id": validation_id,
+                            "cve": package.cve,
+                            "run": run_index,
+                            "role": role,
+                            "target": target.name,
+                            "version": runtime.services[role].version,
+                            "image": runtime.services[role].image_tag,
+                            "started_at": run_started_at,
+                            "finished_at": run_finished_at,
+                            "telemetry": telemetry,
+                        },
                     )
             except Exception as exc:  # noqa: BLE001 - evidence must survive probe errors
                 errors.append(
@@ -430,6 +451,7 @@ def run_validation(
         "verdict": decision["verdict"],
         "reason": decision["reason"],
         "runs": run_count,
+        "validation_id": validation_id,
         "started_at": started_at,
         "finished_at": finished_at,
         "targets": {

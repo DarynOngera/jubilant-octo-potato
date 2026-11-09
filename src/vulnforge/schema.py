@@ -20,6 +20,7 @@ SCHEMA_FILES = {
     "detection": "detection.schema.json",
     "detection-spec": "detection-spec.schema.json",
     "evidence": "evidence.schema.json",
+    "telemetry": "telemetry.schema.json",
     "exploitability": "exploitability.schema.json",
     "provenance": "provenance.schema.json",
     "prioritization": "prioritization.schema.json",

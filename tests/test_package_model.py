@@ -20,6 +20,7 @@ from vulnforge.packages import (  # noqa: E402
     find_package,
     load_package,
     load_packages,
+    package_path,
     validate_against_catalog,
     validate_package,
 )
@@ -113,6 +114,34 @@ class PackageModelTests(unittest.TestCase):
             any("patched == first_fixed" in error for error in modified.errors),
             modified.errors,
         )
+
+    def test_vulnerable_version_must_be_affected(self):
+        pkg = find_package(self.paths, CVE)
+        assert pkg.advisory is not None
+        advisory = dataclasses.replace(
+            pkg.advisory,
+            affected=">= 1.14.1 and < 1.15.0",
+            affected_ranges=[],
+        )
+        modified = Package(
+            root=pkg.root,
+            manifest=pkg.manifest,
+            advisory=advisory,
+            lab=pkg.lab,
+            probe=pkg.probe,
+            errors=[],
+        )
+        check_package_consistency(modified)
+        self.assertTrue(
+            any("is not in the advisory affected range" in error for error in modified.errors),
+            modified.errors,
+        )
+
+    def test_package_path_cannot_escape_root(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            with self.assertRaisesRegex(Exception, "escapes package root"):
+                package_path(root, "../outside.json")
 
     def test_validated_status_requires_confirmed_verdict(self):
         pkg = find_package(self.paths, CVE)
