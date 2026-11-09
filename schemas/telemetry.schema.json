@@ -15,7 +15,8 @@
     "image",
     "started_at",
     "finished_at",
-    "telemetry"
+    "telemetry",
+    "host_telemetry"
   ],
   "properties": {
     "schema_version": {"const": "1.0"},
@@ -28,6 +29,17 @@
     "image": {"type": "string", "minLength": 1},
     "started_at": {"type": "string", "minLength": 1},
     "finished_at": {"type": "string", "minLength": 1},
-    "telemetry": {"type": "object"}
+    "telemetry": {"type": "object"},
+    "host_telemetry": {
+      "type": "object",
+      "required": ["source", "samples", "errors"],
+      "properties": {
+        "source": {"type": "string"},
+        "interval_s": {"type": "number", "exclusiveMinimum": 0},
+        "samples": {"type": "array"},
+        "errors": {"type": "array"}
+      },
+      "additionalProperties": false
+    }
   }
 }

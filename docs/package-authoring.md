@@ -64,12 +64,17 @@ runtime; it must not hard-code host ports.
 `poc/manifest.json` declares the entrypoint, target roles, kwargs, metric, and
 thresholds.
 
+Follow [poc-authoring.md](poc-authoring.md) for the required hypothesis,
+budget, control, metric, and validation sequence. It defines how a scaffolded
+package becomes a defensible, reproducible PoC.
+
 ## Validate
 
 ```bash
 vulnforge package scaffold <CVE>
 vulnforge package validate <CVE>
 vulnforge lab start <CVE>
+vulnforge lab observe <CVE> --samples 5 --interval 1  # optional live host view
 vulnforge validate <CVE> --runs 3
 vulnforge detect <CVE>
 vulnforge report <CVE>

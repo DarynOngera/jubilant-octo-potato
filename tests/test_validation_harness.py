@@ -104,6 +104,7 @@ class HarnessTests(unittest.TestCase):
                     runtime=runtime,
                     runs=3,
                     capture_logs=False,
+                    capture_host_telemetry=False,
                 )
 
             validation = result["validation"]
@@ -127,6 +128,7 @@ class HarnessTests(unittest.TestCase):
             self.assertEqual(telemetry["validation_id"], validation["validation_id"])
             self.assertEqual(telemetry["role"], "vulnerable")
             self.assertIn("attack", telemetry["telemetry"])
+            self.assertEqual(telemetry["host_telemetry"]["source"], "disabled")
             manifest = json.loads((pkg_dir / "package.json").read_text())
             self.assertEqual(manifest["status"], "validated")
             self.assertEqual(manifest["validation"]["last_verdict"], "CONFIRMED")
@@ -180,6 +182,7 @@ class HarnessTests(unittest.TestCase):
                     runtime=runtime,
                     runs=3,
                     capture_logs=False,
+                    capture_host_telemetry=False,
                 )
 
             validation = result["validation"]

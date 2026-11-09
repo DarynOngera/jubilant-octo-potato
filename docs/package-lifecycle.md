@@ -60,6 +60,7 @@ The supported order is:
 ```bash
 vulnforge package validate <CVE>
 vulnforge lab start <CVE>
+vulnforge lab observe <CVE> --samples 5 --interval 1
 vulnforge poc run <CVE>                 # optional single-run smoke test
 vulnforge validate <CVE> --runs 3
 vulnforge detect <CVE>
@@ -70,6 +71,17 @@ vulnforge lab stop <CVE>
 `validate` needs a running lab. `detect` needs validation evidence. `report`
 can be generated without detection, but the report will say detection has not
 run; that is not a complete result.
+
+During `validate`, the evidence bundle includes three observation layers:
+
+- the probe's stimulus, results, and timing;
+- target-provided application telemetry; and
+- host-side `docker stats` samples for both lab containers, including CPU,
+  memory, PIDs, network I/O, block I/O, and any collection errors.
+
+The host collector runs outside the target containers. It never mounts the
+Docker socket in a target and records observation failures rather than treating
+them as zero resource use.
 
 ## 2. What makes a package complete
 

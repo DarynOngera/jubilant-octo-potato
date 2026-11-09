@@ -101,6 +101,19 @@ def build_parser() -> argparse.ArgumentParser:
     lab_status.add_argument("--json", action="store_true", help="emit JSON")
     lab_status.set_defaults(func=_cmd_lab)
 
+    lab_observe = lab_sub.add_parser(
+        "observe", help="sample host-side container resources for a running lab"
+    )
+    lab_observe.add_argument("cve", help="CVE identifier")
+    lab_observe.add_argument(
+        "--samples", type=int, default=5, help="number of snapshots to collect (default: 5)"
+    )
+    lab_observe.add_argument(
+        "--interval", type=float, default=1.0, help="seconds between snapshots (default: 1)"
+    )
+    lab_observe.add_argument("--json", action="store_true", help="emit JSON")
+    lab_observe.set_defaults(func=_cmd_lab)
+
     poc = subparsers.add_parser("poc", help="run a package PoC against its runtime")
     poc_sub = poc.add_subparsers(dest="poc_command", required=True)
     poc_run = poc_sub.add_parser("run", help="run the probe once")

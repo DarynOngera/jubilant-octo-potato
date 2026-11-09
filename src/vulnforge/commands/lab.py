@@ -4,11 +4,13 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from typing import Any
 
 from ..config import FactoryConfig
 from ..errors import PackageError
 from ..lab import LabOrchestrator
+from ..lab.telemetry import ContainerSampler
 from ..packages import find_package, validate_package
 from ..paths import Paths
 from ..probe import ProbeResult, ProbeTarget, load_probe
@@ -92,6 +94,55 @@ def _cmd_lab(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
                 ],
             )
         return 0
+
+    if args.lab_command == "observe":
+        if args.samples < 1:
+            print("error: --samples must be at least 1", file=sys.stderr)
+            return 2
+        if args.interval <= 0:
+            print("error: --interval must be greater than zero", file=sys.stderr)
+            return 2
+        try:
+            runtime, runtime_path = load_runtime(paths, pkg.cve)
+        except Exception as exc:  # noqa: BLE001 - convert runtime loading to CLI output
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        with ContainerSampler(runtime.services, interval_s=args.interval) as sampler:
+            # ``ContainerSampler`` captures one snapshot on entry and another on
+            # exit, so sleeping N-1 intervals provides N requested observations.
+            for _ in range(args.samples - 1):
+                time.sleep(args.interval)
+        payload = {
+            "cve": pkg.cve,
+            "runtime": str(runtime_path),
+            "samples_requested": args.samples,
+            "interval_s": args.interval,
+            "targets": {
+                role: {
+                    **sampler.for_role(role),
+                    # The context manager takes a final boundary snapshot on
+                    # exit. Keep the CLI's requested sample count exact.
+                    "samples": sampler.for_role(role)["samples"][: args.samples],
+                }
+                for role in runtime.services
+            },
+        }
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(f"{pkg.cve}: host-side container observations")
+            for role, data in payload["targets"].items():
+                samples = data["samples"]
+                latest = samples[-1]["container"] if samples else None
+                memory = latest.get("memory_bytes") if latest else None
+                cpu = latest.get("cpu_ratio") if latest else None
+                pids = latest.get("pids") if latest else None
+                print(
+                    f"  {role:<10} samples={len(samples)} errors={len(data['errors'])} "
+                    f"memory={memory if memory is not None else '-'}B "
+                    f"cpu={cpu if cpu is not None else '-'} pids={pids if pids is not None else '-'}"
+                )
+        return 0 if not any(data["errors"] for data in payload["targets"].values()) else 1
 
     print(f"error: unknown lab command {args.lab_command!r}", file=sys.stderr)
     return 2

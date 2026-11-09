@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
+from contextlib import nullcontext
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable
@@ -11,6 +12,7 @@ from typing import Any, Callable
 from ..config import FactoryConfig
 from ..errors import LabError
 from ..lab import LabRuntime, docker
+from ..lab.telemetry import ContainerSampler
 from ..models import Package
 from ..paths import Paths
 from ..probe import ProbeResult, ProbeTarget, load_probe
@@ -298,6 +300,7 @@ def run_validation(
     runs: int | None = None,
     aa_control: bool = False,
     capture_logs: bool = True,
+    capture_host_telemetry: bool = True,
 ) -> dict[str, Any]:
     if package.manifest is None or package.lab is None or package.probe is None:
         raise LabError(f"package {package.cve} is not complete enough to validate")
@@ -350,7 +353,13 @@ def run_validation(
             target = targets[role]
             try:
                 run_started_at = datetime.now(timezone.utc).isoformat()
-                result = ProbeResult.coerce(probe(target, **kwargs))
+                sampler = (
+                    ContainerSampler(runtime.services)
+                    if capture_host_telemetry
+                    else nullcontext(None)
+                )
+                with sampler as host_sampler:
+                    result = ProbeResult.coerce(probe(target, **kwargs))
                 run_finished_at = datetime.now(timezone.utc).isoformat()
                 metric = result.metrics.get(metric_name)
                 if metric is None:
@@ -381,23 +390,28 @@ def run_validation(
                 records.append(record)
                 _write_json(runs_dir / f"run-{run_index:02d}-{role}.json", record)
                 telemetry = result.observations.get("telemetry")
-                if telemetry is not None:
-                    _write_json(
-                        telemetry_dir / f"run-{run_index:02d}-{role}.json",
-                        {
-                            "schema_version": "1.0",
-                            "validation_id": validation_id,
-                            "cve": package.cve,
-                            "run": run_index,
-                            "role": role,
-                            "target": target.name,
-                            "version": runtime.services[role].version,
-                            "image": runtime.services[role].image_tag,
-                            "started_at": run_started_at,
-                            "finished_at": run_finished_at,
-                            "telemetry": telemetry,
-                        },
-                    )
+                host_telemetry = (
+                    host_sampler.for_role(role)
+                    if isinstance(host_sampler, ContainerSampler)
+                    else {"source": "disabled", "samples": [], "errors": []}
+                )
+                _write_json(
+                    telemetry_dir / f"run-{run_index:02d}-{role}.json",
+                    {
+                        "schema_version": "1.0",
+                        "validation_id": validation_id,
+                        "cve": package.cve,
+                        "run": run_index,
+                        "role": role,
+                        "target": target.name,
+                        "version": runtime.services[role].version,
+                        "image": runtime.services[role].image_tag,
+                        "started_at": run_started_at,
+                        "finished_at": run_finished_at,
+                        "telemetry": telemetry if isinstance(telemetry, dict) else {},
+                        "host_telemetry": host_telemetry,
+                    },
+                )
             except Exception as exc:  # noqa: BLE001 - evidence must survive probe errors
                 errors.append(
                     {"run": run_index, "role": role, "error": str(exc)}
