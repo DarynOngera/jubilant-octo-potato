@@ -115,7 +115,7 @@ CVSS answers 'how bad if it fires, under worst-case assumptions.' It does not an
 - Research priority: **8.3** (I=8 E=8 R=10 D=8) -- E4 - low complexity, unauthenticated, remote
 - Analyst note: Body-size cap silently not enforced during streaming reads; needs a body-consuming Plug but no other prerequisite.
 - Fixing commit(s): [`ae3520dfdb`](https://github.com/mtrudel/bandit/commit/ae3520dfdbfab115c638f8c7f6f6b805db34e1ab)
-- PoC status: not yet implemented (see Section 5 for the pattern to extend)
+- PoC status: **implemented** -- `vulnerabilities/CVE-2026-39803/poc/exploit.py`
 
 ### CVE-2026-116078
 
@@ -185,7 +185,7 @@ CVSS answers 'how bad if it fires, under worst-case assumptions.' It does not an
 - Research priority: **6.65** (I=7 E=6 R=7 D=7) -- E3 - straightforward protocol interaction
 - Analyst note: Timer-reset trickle attack; needs sustained low-rate WINDOW_UPDATEs, good for a long-duration lab run rather than a quick PoC.
 - Fixing commit(s): [`d88b21953c`](https://github.com/mtrudel/bandit/commit/d88b21953c65061f21136ea76a89a4f95a2ac7a1), [`fff06efe3b`](https://github.com/mtrudel/bandit/commit/fff06efe3be962b484bd4d3eb339372fda5a231f)
-- PoC status: not yet implemented (see Section 5 for the pattern to extend)
+- PoC status: **implemented** -- `vulnerabilities/CVE-2026-105659/poc/exploit.py`
 
 ### CVE-2026-115269
 
@@ -427,24 +427,26 @@ CVSS answers 'how bad if it fires, under worst-case assumptions.' It does not an
 
 ## 5. PoC coverage and how to extend it
 
-2 package probes are implemented under `vulnerabilities/*/poc/` and run by `vulnforge validate`. The legacy `probes/registry.py` harness remains for historical comparison.
+4 package probes are implemented under `vulnerabilities/*/poc/` and run by `vulnforge validate`. The legacy `probes/registry.py` harness remains for historical comparison.
 
+- `CVE-2026-105659` -> `vulnerabilities/CVE-2026-105659/poc/exploit.py` (vulnerable `vulnerable` vs patched `patched`; metric `attack_memory_delta`)
 - `CVE-2026-111101` -> `vulnerabilities/CVE-2026-111101/poc/exploit.py` (vulnerable `vulnerable` vs patched `interim`; metric `attack_memory_delta`)
 - `CVE-2026-116078` -> `vulnerabilities/CVE-2026-116078/poc/exploit.py` (vulnerable `interim` vs patched `patched`; metric `attack_memory_delta`)
+- `CVE-2026-39803` -> `vulnerabilities/CVE-2026-39803/poc/exploit.py` (vulnerable `vulnerable` vs patched `patched`; metric `attack_memory_delta`)
 
 Multi-run results (`vulnerabilities/*/evidence/validation.json`):
 
 | CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict | Detection |
 |---|---|---|---|---|---|---|---|
 | `CVE-2026-111101` | `1.13.1` -> `1.14.0` | `attack_memory_delta` | 2.66 MiB | 1.67 MiB | 3 | **INCONCLUSIVE** | INCONCLUSIVE |
-| `CVE-2026-116078` | `1.14.0` -> `1.14.1` | `attack_memory_delta` | 7.79 MiB | 0.63 MiB | 3 | **CONFIRMED** | TRIGGERED |
+| `CVE-2026-116078` | `1.14.0` -> `1.14.1` | `attack_memory_delta` | 7.78 MiB | 0.60 MiB | 3 | **CONFIRMED** | TRIGGERED |
 
 Verdicts are median-based with a patched-CV guard; run ranges must not overlap in absolute mode. A non-`CONFIRMED` verdict is a real result, not a reporting gap.
 - `CVE-2026-111101`: INCONCLUSIVE -- relative reduction 1.60x is below the pre-registered 2.00x threshold
 
 The next-highest-priority item that is still vulnerable at the lab's `1.13.1` checkpoint is **CVE-2026-108525** (HTTP/2 inbound flow control is not enforced, letting a client queue unbounded DATA in stream processes in Bandit). Add its package under `vulnerabilities/`, register the probe in `poc/manifest.json`, and re-run `vulnforge validate`.
 
-12 remaining advisories are fixed before `1.13.1` (for example CVE-2026-39803, CVE-2026-39806, CVE-2026-105659, CVE-2026-42786) and cannot be reproduced against the current "vulnerable" container. Add the corresponding older checkpoint version from `data/lab-checkpoints.json` before implementing those PoCs.
+10 remaining advisories are fixed before `1.13.1` (for example CVE-2026-39806, CVE-2026-42786, CVE-2026-39804, CVE-2026-65623) and cannot be reproduced against the current "vulnerable" container. Add the corresponding older checkpoint version from `data/lab-checkpoints.json` before implementing those PoCs.
 
 ## 6. Remediation
 
