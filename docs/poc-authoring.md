@@ -1,10 +1,21 @@
 # Building a package PoC
 
-A VulnForge PoC is a bounded experiment, not an exploit script collection. It
+A VulnForge PoC is a bounded experiment. It
 must prove a pre-registered behavioral difference between the vulnerable and
 patched targets in the same lab configuration.
 
 ## Research sequence
+
+For a CVE covered by a reviewed profile, build the initial lab PoC directly:
+
+```bash
+vulnforge poc build CVE-2026-XXXXX
+```
+
+The builder reads `advisory.json`, selects a target-specific profile, writes
+`poc/exploit.py`, derives `poc/manifest.json` from the profile, and records
+the decision in `poc/proposal.json`. It only replaces the scaffold placeholder.
+Unsupported CVE mechanisms require a new reviewed profile.
 
 1. **Write the claim.** State the reachable input, required protocol state,
    expected effect, and the fixed version. Put the evidence in

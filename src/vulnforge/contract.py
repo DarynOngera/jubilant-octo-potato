@@ -49,7 +49,7 @@ EVIDENCE_DIRS = (
 STATUS_ARTIFACTS: dict[str, tuple[str, ...]] = {
     "draft": BASE_FILES + BASE_DIRS,
     "lab-ready": BASE_FILES + BASE_DIRS + LAB_FILES,
-    "poc-implemented": BASE_FILES + BASE_DIRS + LAB_FILES,
+    "poc-implemented": BASE_FILES + BASE_DIRS,
     "validated": BASE_FILES + BASE_DIRS + LAB_FILES + EVIDENCE_FILES + EVIDENCE_DIRS,
     "inconclusive": BASE_FILES + BASE_DIRS + LAB_FILES + EVIDENCE_FILES + EVIDENCE_DIRS,
     "retired": BASE_FILES + BASE_DIRS,

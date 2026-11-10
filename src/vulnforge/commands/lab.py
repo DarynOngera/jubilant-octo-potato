@@ -13,6 +13,7 @@ from ..lab import LabOrchestrator
 from ..lab.telemetry import ContainerSampler
 from ..packages import find_package, validate_package
 from ..paths import Paths
+from ..pocgen import build_poc
 from ..probe import ProbeResult, ProbeTarget, load_probe
 from ..targets.loader import load_adapter
 from ..validate import load_runtime
@@ -154,6 +155,16 @@ def _cmd_poc(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
     except PackageError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
+    if args.poc_command == "build":
+        try:
+            result = build_poc(pkg)
+        except PackageError as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        print(f"Built PoC for {result['cve']} from CVE profile {result['profile']}")
+        print(f"  proposal: {result['proposal']}")
+        return 0
+
     errors = validate_package(pkg, paths)
     if errors:
         print(f"package {pkg.cve} is invalid:", file=sys.stderr)

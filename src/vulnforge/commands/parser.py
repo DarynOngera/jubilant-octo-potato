@@ -116,6 +116,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     poc = subparsers.add_parser("poc", help="run a package PoC against its runtime")
     poc_sub = poc.add_subparsers(dest="poc_command", required=True)
+    poc_build = poc_sub.add_parser(
+        "build", help="build a bounded package PoC directly from CVE metadata"
+    )
+    poc_build.add_argument("cve", help="CVE identifier")
+    poc_build.set_defaults(func=_cmd_poc)
     poc_run = poc_sub.add_parser("run", help="run the probe once")
     poc_run.add_argument("cve", help="CVE identifier")
     poc_run.add_argument(
