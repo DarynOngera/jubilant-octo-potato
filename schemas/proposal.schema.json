@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://vulnforge.local/schemas/proposal.schema.json",
+  "title": "VulnForge PoC Proposal",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema_version",
+    "cve",
+    "status",
+    "profile",
+    "summary",
+    "generator_version",
+    "created_at",
+    "source",
+    "probe",
+    "patch_analysis"
+  ],
+  "properties": {
+    "schema_version": {"const": "1.0"},
+    "cve": {"type": "string", "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"},
+    "status": {"enum": ["built", "unchanged"]},
+    "profile": {"type": "string", "minLength": 1},
+    "summary": {"type": "string", "minLength": 1},
+    "generator_version": {"type": "string", "minLength": 1},
+    "created_at": {"type": "string", "minLength": 1},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "advisory_title",
+        "track",
+        "adapter",
+        "versions",
+        "reference_cve"
+      ],
+      "properties": {
+        "advisory_title": {"type": "string", "minLength": 1},
+        "track": {"type": "string", "minLength": 1},
+        "adapter": {"type": "string", "minLength": 1},
+        "versions": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["vulnerable", "patched"],
+          "properties": {
+            "vulnerable": {"type": "string", "minLength": 1},
+            "patched": {"type": "string", "minLength": 1}
+          }
+        },
+        "reference_cve": {
+          "type": "string",
+          "pattern": "^CVE-[0-9]{4}-[0-9]{4,}$"
+        }
+      }
+    },
+    "probe": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "entrypoint",
+        "kwargs",
+        "metric",
+        "thresholds",
+        "predicate"
+      ],
+      "properties": {
+        "entrypoint": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9_.]+:[A-Za-z_][A-Za-z0-9_]*$"
+        },
+        "kwargs": {"type": "object"},
+        "metric": {"type": "string", "minLength": 1},
+        "thresholds": {"type": "object"},
+        "predicate": {"type": "string", "minLength": 1}
+      }
+    },
+    "patch_analysis": {
+      "type": "array",
+      "items": {"type": "string", "minLength": 1}
+    }
+  }
+}

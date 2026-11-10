@@ -16,6 +16,7 @@ SCHEMA_FILES = {
     "package": "package.schema.json",
     "lab": "lab.schema.json",
     "probe": "probe.schema.json",
+    "proposal": "proposal.schema.json",
     "validation": "validation.schema.json",
     "detection": "detection.schema.json",
     "detection-spec": "detection-spec.schema.json",

@@ -149,6 +149,7 @@ def _cmd_package_scaffold(args: argparse.Namespace, cfg: FactoryConfig, paths: P
     print(f"Scaffolded draft package for {args.cve}")
     for path in created:
         print(f"  {path}")
-    print("Next: implement poc/exploit.py, set the predicate in poc/manifest.json,")
+    print("Next: implement poc/exploit.py (or `vulnforge poc build` if a reviewed")
+    print("      profile covers this CVE), set the predicate in poc/manifest.json,")
     print("      then run `vulnforge package validate`, `lab start`, and `validate`.")
     return 0

@@ -17,6 +17,14 @@ The builder reads `advisory.json`, selects a target-specific profile, writes
 the decision in `poc/proposal.json`. It only replaces the scaffold placeholder.
 Unsupported CVE mechanisms require a new reviewed profile.
 
+The generated probe starts with a provenance marker such as
+`# generated-by: vulnforge poc build bandit-http2-one-byte-data
+ref=CVE-2026-116078`. Re-running `poc build` on an unchanged generated probe
+is an idempotent no-op; once you edit it, the probe is researcher-owned and
+the builder refuses to replace it unless you pass `--force`. Hand-authored
+probes are never replaced. `poc/proposal.json` is schema-checked by
+`vulnforge package validate` whenever it exists.
+
 1. **Write the claim.** State the reachable input, required protocol state,
    expected effect, and the fixed version. Put the evidence in
    `analysis/attack-surface.md` and `analysis/root-cause.md`.

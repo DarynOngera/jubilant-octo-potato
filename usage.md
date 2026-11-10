@@ -131,6 +131,7 @@ vulnforge lab status CVE-2026-116078 --json
 vulnforge lab stop CVE-2026-116078
 
 # Probe, validation, detection, report
+vulnforge poc build CVE-2026-116078
 vulnforge poc run CVE-2026-116078
 vulnforge validate CVE-2026-116078 --runs 3
 vulnforge detect CVE-2026-116078
@@ -441,6 +442,31 @@ docker port bandit-vulnerable
 ---
 
 ## 4. Running a PoC directly
+
+### 4a. Building a PoC from the CVE
+
+`vulnforge poc build` generates a package probe from the CVE alone, no
+hand-picked protocol template or parameters:
+
+```bash
+vulnforge package scaffold CVE-2026-XXXXX
+vulnforge poc build CVE-2026-XXXXX
+vulnforge package validate CVE-2026-XXXXX
+```
+
+The command selects a reviewed profile from `advisory.json` (adapter, track,
+and advisory title), copies the reviewed reference probe for that profile,
+rewrites it for this package's CVE and lab targets, and writes
+`poc/proposal.json` recording the decision. It only replaces the scaffold
+placeholder probe:
+
+- a hand-authored probe is never replaced;
+- re-running on an unchanged generated probe is a no-op;
+- an edited generated probe requires `--force`;
+- a CVE that matches no profile fails with the capability that is missing and
+  the package stays a draft.
+
+### 4b. Running a generated PoC
 
 Package probes read the dynamic runtime written by `vulnforge lab start`:
 

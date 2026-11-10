@@ -156,12 +156,23 @@ def _cmd_poc(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
         print(f"error: {exc}", file=sys.stderr)
         return 1
     if args.poc_command == "build":
+        errors = validate_package(pkg, paths)
+        if errors:
+            print(f"package {pkg.cve} is invalid:", file=sys.stderr)
+            for error in errors:
+                print(f"  - {error}", file=sys.stderr)
+            return 1
         try:
-            result = build_poc(pkg)
+            result = build_poc(pkg, force=args.force)
         except PackageError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        print(f"Built PoC for {result['cve']} from CVE profile {result['profile']}")
+        if result["status"] == "unchanged":
+            print(
+                f"PoC for {result['cve']} already matches profile {result['profile']}"
+            )
+        else:
+            print(f"Built PoC for {result['cve']} from CVE profile {result['profile']}")
         print(f"  proposal: {result['proposal']}")
         return 0
 

@@ -6,14 +6,25 @@ an unsupported CVE remains a draft until a researcher adds a profile.
 """
 from __future__ import annotations
 
+import copy
 import json
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .. import __version__
 from ..errors import PackageError
 from ..models import Package
+
+GENERATOR_VERSION = __version__
+
+PLACEHOLDER_MARK = 'NotImplementedError("implement the package probe for this CVE")'
+GENERATED_MARKER = "# generated-by: vulnforge poc build {profile} ref={reference}"
+_MARKER_RE = re.compile(
+    r"^# generated-by: vulnforge poc build (?P<profile>\S+) ref=(?P<reference>\S+)\s*$"
+)
 
 
 @dataclass(frozen=True)
@@ -23,6 +34,7 @@ class Profile:
     summary: str
     track: str
     title_phrase: str
+    capability: str
 
     def matches(self, advisory: Any) -> bool:
         return (
@@ -38,6 +50,7 @@ PROFILES = (
         summary="HTTP/2 request bodies fragmented into one-byte DATA frames",
         track="http2_resource_exhaustion",
         title_phrase="1-byte data frames",
+        capability="Bandit HTTP/2 one-byte DATA-frame memory-amplification profile",
     ),
     Profile(
         id="bandit-http1-one-byte-chunks",
@@ -45,8 +58,24 @@ PROFILES = (
         summary="HTTP/1.1 request bodies fragmented into one-byte chunks",
         track="http1_resource_exhaustion",
         title_phrase="1-byte chunks",
+        capability="Bandit HTTP/1 one-byte chunk memory-amplification profile",
     ),
 )
+
+# What a CVE of a known track still needs before the engine can build it.
+# Used in the unsupported-CVE failure so the next work item is specific.
+TRACK_CAPABILITIES = {
+    "http2_resource_exhaustion": "Bandit HTTP/2",
+    "http1_resource_exhaustion": "Bandit HTTP/1",
+    "websocket_exhaustion": "Bandit WebSocket",
+    "websocket_state_correctness": "Bandit WebSocket correctness",
+    "http_request_smuggling": "Bandit request-smuggling correctness",
+    "request_metadata_validation": "Bandit request metadata validation",
+}
+
+
+def supported_profile_ids() -> tuple[str, ...]:
+    return tuple(profile.id for profile in PROFILES)
 
 
 def _profile(package: Package) -> Profile:
@@ -54,14 +83,18 @@ def _profile(package: Package) -> Profile:
         raise PackageError(f"{package.cve} has no valid advisory/package manifest")
     if package.manifest.adapter_name != "bandit":
         raise PackageError(
-            f"no CVE-driven PoC profile is available for adapter {package.manifest.adapter_name!r}"
+            f"no CVE-driven PoC profile is available for adapter "
+            f"{package.manifest.adapter_name!r}"
         )
     for profile in PROFILES:
         if profile.matches(package.advisory):
             return profile
+    track = package.advisory.track
+    capability = TRACK_CAPABILITIES.get(track, "a reviewed target-specific")
     raise PackageError(
-        f"{package.cve} does not match a supported CVE-driven PoC profile; "
-        "add a reviewed profile for its advisory mechanism"
+        f"{package.cve} does not match a supported CVE-driven PoC profile.\n"
+        f"Required capability: {capability} profile for this advisory mechanism.\n"
+        f"Supported profiles: {', '.join(supported_profile_ids())}."
     )
 
 
@@ -70,7 +103,20 @@ def _placeholder(path: Path) -> bool:
         text = path.read_text()
     except FileNotFoundError:
         return True
-    return "NotImplementedError(\"implement the package probe for this CVE\")" in text
+    return PLACEHOLDER_MARK in text
+
+
+def _generated(path: Path) -> tuple[str, str] | None:
+    """Return the (profile, reference CVE) recorded in the generated marker."""
+    try:
+        text = path.read_text()
+    except FileNotFoundError:
+        return None
+    for line in text.splitlines()[:5]:
+        match = _MARKER_RE.match(line)
+        if match:
+            return match.group("profile"), match.group("reference")
+    return None
 
 
 def _targets(package: Package) -> dict[str, str]:
@@ -86,7 +132,13 @@ def _targets(package: Package) -> dict[str, str]:
 
 
 def _reference(package: Package, profile: Profile) -> tuple[str, dict[str, Any]]:
-    root = package.root.parent / profile.reference_cve / "poc"
+    root = (package.root.parent / profile.reference_cve / "poc").resolve()
+    if root == (package.root / "poc").resolve():
+        raise PackageError(
+            f"PoC profile {profile.id!r} uses {profile.reference_cve} as its "
+            "reviewed reference, so that package cannot rebuild itself; "
+            "restore its reviewed probe or build a different package"
+        )
     source_path = root / "exploit.py"
     manifest_path = root / "manifest.json"
     try:
@@ -96,43 +148,185 @@ def _reference(package: Package, profile: Profile) -> tuple[str, dict[str, Any]]
         raise PackageError(
             f"PoC profile {profile.id!r} is missing its reviewed reference package"
         ) from exc
+    for key in ("entrypoint", "targets", "kwargs", "metric", "thresholds"):
+        if key not in manifest:
+            raise PackageError(
+                f"reference package {profile.reference_cve} poc/manifest.json "
+                f"is missing {key!r}"
+            )
     return source, manifest
 
 
-def build_poc(package: Package) -> dict[str, Any]:
+def _render(source: str, package: Package, profile: Profile) -> str:
+    rendered = source.replace(profile.reference_cve, package.cve)
+    marker = GENERATED_MARKER.format(
+        profile=profile.id, reference=profile.reference_cve
+    )
+    lines = rendered.splitlines(keepends=True)
+    if lines and lines[0].startswith("#!"):
+        lines.insert(1, f"{marker}\n")
+    else:
+        lines.insert(0, f"{marker}\n")
+    return "".join(lines)
+
+
+def _predicate(metric: str, thresholds: dict[str, Any], runs: int) -> str:
+    mode = str(thresholds.get("mode", "absolute"))
+    vuln_min = thresholds["vulnerable_min"]
+    patched_max = thresholds["patched_max"]
+    max_cv = float(thresholds.get("max_cv", 1.0))
+    min_samples = int(thresholds.get("min_samples", 1))
+    head = (
+        f"vulnerable {metric} median >= {vuln_min} and patched median <= "
+        f"{patched_max}"
+    )
+    if mode == "relative":
+        min_ratio = thresholds.get("min_ratio", 2.0)
+        head += f" with vulnerable/patched median ratio >= {min_ratio}x"
+    clauses = [
+        f"{head} over {runs} runs (>= {min_samples} successful runs per role)",
+        f"patched coefficient of variation <= {max_cv:.0%}",
+    ]
+    if mode != "relative":
+        clauses.append("run ranges must not overlap")
+    return "; ".join(clauses)
+
+
+def _patch_analysis(package: Package) -> list[str]:
+    """List captured patch-analysis files the selector considered."""
+    analysis = package.root / "analysis"
+    found: list[str] = []
+    commits_dir = analysis / "commits"
+    if commits_dir.is_dir():
+        for path in sorted(commits_dir.iterdir()):
+            if path.suffix in {".patch", ".json"}:
+                found.append(str(path.relative_to(package.root)))
+    scaffold = analysis / "root-cause.generated.md"
+    if scaffold.is_file():
+        found.append(str(scaffold.relative_to(package.root)))
+    return found
+
+
+def _load_manifest(path: Path, package: Package) -> dict[str, Any]:
+    try:
+        return json.loads(path.read_text())
+    except FileNotFoundError as exc:
+        raise PackageError(
+            f"{package.cve} has no poc/manifest.json; scaffold the package first"
+        ) from exc
+    except json.JSONDecodeError as exc:
+        raise PackageError(
+            f"{package.cve} poc/manifest.json is not valid JSON: {exc}"
+        ) from exc
+
+
+def _write_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data, indent=2) + "\n")
+
+
+def build_poc(package: Package, *, force: bool = False) -> dict[str, Any]:
     """Generate a package probe and manifest values from the CVE's profile.
 
-    Existing hand-authored probes are protected. The generated proposal records
-    the advisory facts and reviewed reference used for the decision.
+    Only the scaffold placeholder is replaced. A hand-authored probe is never
+    overwritten. Re-running the builder on an unchanged generated probe is an
+    idempotent no-op; a generated probe that no longer matches the rendered
+    reference needs ``force``. The proposal records the advisory facts,
+    reviewed reference, predicate, and patch-analysis provenance.
     """
     if package.manifest is None or package.advisory is None:
         raise PackageError(f"{package.cve} has no valid package/advisory")
     profile = _profile(package)
-    exploit_path = package.root / "poc" / "exploit.py"
-    if not _placeholder(exploit_path):
-        raise PackageError(
-            f"refusing to replace existing probe {exploit_path}; "
-            "CVE-driven generation only replaces the scaffold placeholder"
-        )
+
+    poc_dir = package.root / "poc"
+    exploit_path = poc_dir / "exploit.py"
+    manifest_path = poc_dir / "manifest.json"
+    proposal_path = poc_dir / "proposal.json"
+    existing_manifest = _load_manifest(manifest_path, package)
+
+    replace = False
+    if _placeholder(exploit_path):
+        replace = True
+    else:
+        generated = _generated(exploit_path)
+        if generated is None:
+            raise PackageError(
+                f"refusing to replace existing probe {exploit_path}; "
+                "CVE-driven generation only replaces the scaffold placeholder"
+            )
 
     source, reference_manifest = _reference(package, profile)
-    source = source.replace(profile.reference_cve, package.cve)
-    exploit_path.write_text(source)
-
-    manifest_path = package.root / "poc" / "manifest.json"
-    manifest = json.loads(manifest_path.read_text())
-    manifest.update(
+    rendered = _render(source, package, profile)
+    expected_manifest = dict(existing_manifest)
+    expected_manifest.update(
         {
+            "cve": package.cve,
             "entrypoint": "poc.exploit:run",
             "targets": _targets(package),
-            "kwargs": dict(reference_manifest["kwargs"]),
+            "kwargs": copy.deepcopy(reference_manifest["kwargs"]),
             "metric": reference_manifest["metric"],
-            "thresholds": dict(reference_manifest["thresholds"]),
+            "thresholds": copy.deepcopy(reference_manifest["thresholds"]),
             "runs": int(reference_manifest.get("runs", 3)),
             "disruptive": bool(reference_manifest.get("disruptive", False)),
         }
     )
-    manifest_path.write_text(json.dumps(manifest, indent=2) + "\n")
+    predicate = _predicate(
+        expected_manifest["metric"],
+        expected_manifest["thresholds"],
+        expected_manifest["runs"],
+    )
+
+    if not replace:
+        generated_profile, generated_reference = generated
+        same_profile = (
+            generated_profile == profile.id
+            and generated_reference == profile.reference_cve
+        )
+        identical = (
+            same_profile
+            and exploit_path.read_text() == rendered
+            and existing_manifest == expected_manifest
+        )
+        if not identical and not force:
+            if not same_profile:
+                detail = (
+                    f"it was generated by profile {generated_profile!r} "
+                    f"(reference {generated_reference})"
+                )
+            else:
+                detail = "it no longer matches the rendered reference"
+            raise PackageError(
+                f"refusing to replace generated probe {exploit_path}: {detail}; "
+                "pass --force to regenerate"
+            )
+        replace = not identical
+
+    package_manifest_path = package.root / "package.json"
+    package_manifest = json.loads(package_manifest_path.read_text())
+    desired_package_manifest = dict(package_manifest)
+    if desired_package_manifest.get("status") == "draft":
+        desired_package_manifest["status"] = "poc-implemented"
+    validation = dict(desired_package_manifest.get("validation", {}))
+    validation["predicate"] = predicate
+    desired_package_manifest["validation"] = validation
+
+    unchanged = (
+        not replace
+        and proposal_path.is_file()
+        and desired_package_manifest == package_manifest
+    )
+    if unchanged:
+        return {
+            "cve": package.cve,
+            "profile": profile.id,
+            "proposal": proposal_path,
+            "status": "unchanged",
+        }
+
+    if replace:
+        poc_dir.mkdir(parents=True, exist_ok=True)
+        exploit_path.write_text(rendered)
+        manifest_path.write_text(json.dumps(expected_manifest, indent=2) + "\n")
 
     proposal = {
         "schema_version": "1.0",
@@ -140,30 +334,34 @@ def build_poc(package: Package) -> dict[str, Any]:
         "status": "built",
         "profile": profile.id,
         "summary": profile.summary,
+        "generator_version": GENERATOR_VERSION,
         "source": {
             "advisory_title": package.advisory.title,
             "track": package.advisory.track,
+            "adapter": package.manifest.adapter_name,
+            "versions": {
+                "vulnerable": package.manifest.vulnerable_version,
+                "patched": package.manifest.patched_version,
+            },
             "reference_cve": profile.reference_cve,
         },
         "probe": {
-            "entrypoint": manifest["entrypoint"],
-            "kwargs": manifest["kwargs"],
-            "metric": manifest["metric"],
-            "thresholds": manifest["thresholds"],
+            "entrypoint": expected_manifest["entrypoint"],
+            "kwargs": expected_manifest["kwargs"],
+            "metric": expected_manifest["metric"],
+            "thresholds": expected_manifest["thresholds"],
+            "predicate": predicate,
         },
+        "patch_analysis": _patch_analysis(package),
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
-    proposal_path = package.root / "poc" / "proposal.json"
-    proposal_path.write_text(json.dumps(proposal, indent=2) + "\n")
+    _write_json(proposal_path, proposal)
+    if desired_package_manifest != package_manifest:
+        _write_json(package_manifest_path, desired_package_manifest)
 
-    package_manifest_path = package.root / "package.json"
-    package_manifest = json.loads(package_manifest_path.read_text())
-    package_manifest["status"] = "poc-implemented"
-    validation = dict(package_manifest.get("validation", {}))
-    validation["predicate"] = (
-        f"generated by {profile.id}; use poc/manifest.json thresholds for validation"
-    )
-    package_manifest["validation"] = validation
-    package_manifest_path.write_text(json.dumps(package_manifest, indent=2) + "\n")
-
-    return {"cve": package.cve, "profile": profile.id, "proposal": proposal_path}
+    return {
+        "cve": package.cve,
+        "profile": profile.id,
+        "proposal": proposal_path,
+        "status": "built",
+    }

@@ -206,6 +206,17 @@ def load_package(package_root: Path, schemas_dir: Path) -> Package:
             (
                 _package_path(
                     package_root,
+                    manifest.paths.get("poc", "poc/manifest.json"),
+                    "probe manifest",
+                    pkg.errors,
+                ).parent
+                / "proposal.json",
+                "proposal",
+                "poc/proposal.json",
+            ),
+            (
+                _package_path(
+                    package_root,
                     manifest.paths.get("analysis", "analysis"),
                     "analysis directory",
                     pkg.errors,

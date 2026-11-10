@@ -109,6 +109,23 @@ class CliTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("lab start CVE-2026-111101", err)
 
+    def test_poc_build_unsupported_cve_names_the_capability(self):
+        code, _, err = run_cli("poc", "build", "CVE-2026-105659")
+        self.assertEqual(code, 1)
+        self.assertIn("does not match a supported CVE-driven PoC profile", err)
+        self.assertIn("Required capability: Bandit HTTP/2 profile", err)
+
+    def test_poc_build_refuses_hand_authored_probe(self):
+        code, _, err = run_cli("poc", "build", CVE)
+        self.assertEqual(code, 1)
+        self.assertIn("refusing to replace existing probe", err)
+        self.assertIn("only replaces the scaffold placeholder", err)
+
+    def test_poc_build_unknown_cve(self):
+        code, _, err = run_cli("poc", "build", "CVE-2099-9999")
+        self.assertEqual(code, 1)
+        self.assertIn("not found", err)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
