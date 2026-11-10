@@ -1,6 +1,6 @@
 # Bandit Vulnerability Research -- Technical Report
 
-Generated 2026-11-04 from `data/advisories.json` (24 advisories) and `data/vulnerability-matrix.json`.
+Generated 2026-11-10 from `data/advisories.json` (24 advisories) and `data/vulnerability-matrix.json`.
 
 Source: [Hex advisory registry](https://hex.pm/packages/bandit/advisories), cross-referenced against OSV (`EEF-CVE-*`) and GHSA records linked from each entry.
 
@@ -440,6 +440,7 @@ Multi-run results (`vulnerabilities/*/evidence/validation.json`):
 |---|---|---|---|---|---|---|---|
 | `CVE-2026-111101` | `1.13.1` -> `1.14.0` | `attack_memory_delta` | 2.66 MiB | 1.67 MiB | 3 | **INCONCLUSIVE** | INCONCLUSIVE |
 | `CVE-2026-116078` | `1.14.0` -> `1.14.1` | `attack_memory_delta` | 7.78 MiB | 0.60 MiB | 3 | **CONFIRMED** | TRIGGERED |
+| `CVE-2026-39803` | `1.11.0` -> `1.11.1` | `attack_memory_delta` | 8.33 MiB | 0.96 MiB | 3 | **CONFIRMED** | TRIGGERED |
 
 Verdicts are median-based with a patched-CV guard; run ranges must not overlap in absolute mode. A non-`CONFIRMED` verdict is a real result, not a reporting gap.
 - `CVE-2026-111101`: INCONCLUSIVE -- relative reduction 1.60x is below the pre-registered 2.00x threshold
