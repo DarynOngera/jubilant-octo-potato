@@ -14,7 +14,7 @@ from ..validate import run_validation
 
 def _cmd_validate(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
     try:
-        pkg = find_package(paths, args.cve)
+        pkg = find_package(paths, args.cve, enforce_status_artifacts=False)
     except PackageError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1

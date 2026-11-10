@@ -466,6 +466,12 @@ placeholder probe:
 - a CVE that matches no profile fails with the capability that is missing and
   the package stays a draft.
 
+When `vulnforge analyze` has captured fixing commits, the builder also
+corroborates the advisory with the patch's changed modules and mechanism
+indicators. A patch for a different protocol vetoes automatic selection, and
+`proposal.json` records `selector.confidence` and the paths/indicators used.
+Advisory-only selection (no captured patch) is allowed at confidence 0.5.
+
 ### 4b. Running a generated PoC
 
 Package probes read the dynamic runtime written by `vulnforge lab start`:

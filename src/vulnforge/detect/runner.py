@@ -72,6 +72,18 @@ def _frames(result: dict[str, Any]) -> int:
     return int(result.get("n_frames") or result.get("n_chunks") or 0)
 
 
+_ATTACK_RESULT_KEYS = ("one_byte_result", "chunked_result", "attack_result")
+
+
+def _attack_result(observations: dict[str, Any]) -> dict[str, Any]:
+    """The attack-phase observation, across probe naming conventions."""
+    for key in _ATTACK_RESULT_KEYS:
+        value = observations.get(key)
+        if isinstance(value, dict):
+            return value
+    return {}
+
+
 def _payload(result: dict[str, Any]) -> int:
     return int(result.get("payload_bytes") or 0)
 
@@ -82,7 +94,7 @@ def _duration(result: dict[str, Any]) -> float:
 
 def _connection(record: dict[str, Any]) -> ConnectionSample:
     observations = record.get("observations", {})
-    attack = observations.get("one_byte_result", {})
+    attack = _attack_result(observations)
     metrics = record.get("metrics", {})
     return ConnectionSample(
         conn_id=f"run-{record.get('run', 0):02d}-{record.get('role')}",

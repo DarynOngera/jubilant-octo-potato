@@ -25,6 +25,21 @@ the builder refuses to replace it unless you pass `--force`. Hand-authored
 probes are never replaced. `poc/proposal.json` is schema-checked by
 `vulnforge package validate` whenever it exists.
 
+Currently reviewed profiles:
+
+| Profile | Reference package | Shape |
+|---|---|---|
+| `bandit-http2-one-byte-data` | `CVE-2026-116078` | HTTP/2 body as 1-byte DATA frames |
+| `bandit-http1-one-byte-chunks` | `CVE-2026-111101` | HTTP/1.1 body as 1-byte chunks |
+| `bandit-http1-chunked-length-cap` | `CVE-2026-39803` | Oversized chunked body vs the application length cap |
+
+If `vulnforge analyze` has captured fixing commits, the builder also reads
+them. A patch that contradicts the advisory's protocol (for example an HTTP/2
+advisory whose fix only touches HTTP/1 modules) vetoes automatic selection,
+and the proposal records `selector.confidence`, changed paths, and mechanism
+indicators. With no captured patch, selection is advisory-only at confidence
+0.5.
+
 1. **Write the claim.** State the reachable input, required protocol state,
    expected effect, and the fixed version. Put the evidence in
    `analysis/attack-surface.md` and `analysis/root-cause.md`.

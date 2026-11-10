@@ -16,9 +16,9 @@ from ..report import generate_global_report, write_package_report
 def _cmd_detect(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> int:
     try:
         packages = (
-            [find_package(paths, args.cve)]
+            [find_package(paths, args.cve, enforce_status_artifacts=False)]
             if args.cve
-            else load_packages(paths)
+            else load_packages(paths, enforce_status_artifacts=False)
         )
     except PackageError as exc:
         print(f"error: {exc}", file=sys.stderr)
@@ -57,9 +57,9 @@ def _cmd_report(args: argparse.Namespace, cfg: FactoryConfig, paths: Paths) -> i
         return 2
     try:
         packages = (
-            [find_package(paths, args.cve)]
+            [find_package(paths, args.cve, enforce_status_artifacts=False)]
             if args.cve
-            else load_packages(paths)
+            else load_packages(paths, enforce_status_artifacts=False)
         )
     except PackageError as exc:
         print(f"error: {exc}", file=sys.stderr)

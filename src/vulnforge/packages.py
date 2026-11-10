@@ -131,7 +131,12 @@ def _contains_version(fixed_in: Any, version: str) -> bool:
     return False
 
 
-def load_package(package_root: Path, schemas_dir: Path) -> Package:
+def load_package(
+    package_root: Path,
+    schemas_dir: Path,
+    *,
+    enforce_status_artifacts: bool = True,
+) -> Package:
     package_root = package_root.resolve()
     pkg = Package(root=package_root)
 
@@ -282,11 +287,15 @@ def load_package(package_root: Path, schemas_dir: Path) -> Package:
                 )
 
     if pkg.manifest is not None:
-        check_package_consistency(pkg)
+        check_package_consistency(
+            pkg, enforce_status_artifacts=enforce_status_artifacts
+        )
     return pkg
 
 
-def check_package_consistency(pkg: Package) -> None:
+def check_package_consistency(
+    pkg: Package, *, enforce_status_artifacts: bool = True
+) -> None:
     errors = pkg.errors
     manifest = pkg.manifest
     assert manifest is not None
@@ -439,20 +448,33 @@ def check_package_consistency(pkg: Package) -> None:
             f"validation evidence is missing: {evidence_rel}"
         ), errors)
 
-    for relative in missing_artifacts(pkg.root, manifest.status, manifest.paths):
-        errors.append(
-            f"required artifact for status {manifest.status!r} is missing: {relative}"
+    if enforce_status_artifacts:
+        for relative in missing_artifacts(pkg.root, manifest.status, manifest.paths):
+            errors.append(
+                f"required artifact for status {manifest.status!r} is missing: "
+                f"{relative}"
+            )
+
+
+def load_packages(
+    paths: Paths, *, enforce_status_artifacts: bool = True
+) -> list[Package]:
+    return [
+        load_package(
+            path, paths.schemas, enforce_status_artifacts=enforce_status_artifacts
         )
+        for path in discover_package_dirs(paths)
+    ]
 
 
-def load_packages(paths: Paths) -> list[Package]:
-    return [load_package(path, paths.schemas) for path in discover_package_dirs(paths)]
-
-
-def find_package(paths: Paths, cve: str) -> Package:
+def find_package(
+    paths: Paths, cve: str, *, enforce_status_artifacts: bool = True
+) -> Package:
     for path in discover_package_dirs(paths):
         if path.name == cve:
-            return load_package(path, paths.schemas)
+            return load_package(
+                path, paths.schemas, enforce_status_artifacts=enforce_status_artifacts
+            )
     raise PackageError(
         f"package {cve!r} not found under {paths.packages}; known packages: "
         + (", ".join(p.name for p in discover_package_dirs(paths)) or "<none>")

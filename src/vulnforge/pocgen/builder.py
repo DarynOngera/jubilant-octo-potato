@@ -17,6 +17,7 @@ from typing import Any
 from .. import __version__
 from ..errors import PackageError
 from ..models import Package
+from .signals import PatchSignals, extract_patch_signals
 
 GENERATOR_VERSION = __version__
 
@@ -35,6 +36,8 @@ class Profile:
     track: str
     title_phrase: str
     capability: str
+    protocol: str = ""
+    signal_indicators: tuple[str, ...] = ()
 
     def matches(self, advisory: Any) -> bool:
         return (
@@ -51,6 +54,8 @@ PROFILES = (
         track="http2_resource_exhaustion",
         title_phrase="1-byte data frames",
         capability="Bandit HTTP/2 one-byte DATA-frame memory-amplification profile",
+        protocol="http2",
+        signal_indicators=("data_frames",),
     ),
     Profile(
         id="bandit-http1-one-byte-chunks",
@@ -59,6 +64,20 @@ PROFILES = (
         track="http1_resource_exhaustion",
         title_phrase="1-byte chunks",
         capability="Bandit HTTP/1 one-byte chunk memory-amplification profile",
+        protocol="http1",
+        signal_indicators=("chunked_framing",),
+    ),
+    Profile(
+        id="bandit-http1-chunked-length-cap",
+        reference_cve="CVE-2026-39803",
+        summary=(
+            "HTTP/1.1 chunked bodies buffered past the application's length cap"
+        ),
+        track="http1_resource_exhaustion",
+        title_phrase="length cap",
+        capability="Bandit HTTP/1 chunked length-cap profile",
+        protocol="http1",
+        signal_indicators=("chunked_framing", "length_cap"),
     ),
 )
 
@@ -78,7 +97,18 @@ def supported_profile_ids() -> tuple[str, ...]:
     return tuple(profile.id for profile in PROFILES)
 
 
-def _profile(package: Package) -> Profile:
+def matching_profiles(advisory: Any) -> tuple[Profile, ...]:
+    """Profiles whose advisory track and title phrase match."""
+    return tuple(profile for profile in PROFILES if profile.matches(advisory))
+
+
+def select_profile(package: Package) -> tuple[Profile, PatchSignals]:
+    """Choose the reviewed profile for a package and corroborate it.
+
+    Advisory match is mandatory. When captured fixing patches exist, the
+    selected profile's protocol must appear in them; otherwise the engine
+    refuses automatic selection instead of guessing.
+    """
     if package.advisory is None or package.manifest is None:
         raise PackageError(f"{package.cve} has no valid advisory/package manifest")
     if package.manifest.adapter_name != "bandit":
@@ -86,16 +116,45 @@ def _profile(package: Package) -> Profile:
             f"no CVE-driven PoC profile is available for adapter "
             f"{package.manifest.adapter_name!r}"
         )
-    for profile in PROFILES:
-        if profile.matches(package.advisory):
-            return profile
-    track = package.advisory.track
-    capability = TRACK_CAPABILITIES.get(track, "a reviewed target-specific")
-    raise PackageError(
-        f"{package.cve} does not match a supported CVE-driven PoC profile.\n"
-        f"Required capability: {capability} profile for this advisory mechanism.\n"
-        f"Supported profiles: {', '.join(supported_profile_ids())}."
-    )
+
+    candidates = matching_profiles(package.advisory)
+    if not candidates:
+        track = package.advisory.track
+        capability = TRACK_CAPABILITIES.get(track, "a reviewed target-specific")
+        raise PackageError(
+            f"{package.cve} does not match a supported CVE-driven PoC profile.\n"
+            f"Required capability: {capability} profile for this advisory mechanism.\n"
+            f"Supported profiles: {', '.join(supported_profile_ids())}."
+        )
+
+    signals = extract_patch_signals(package)
+    if len(candidates) > 1:
+        ranked = sorted(
+            candidates,
+            key=lambda profile: signals.confidence_for(profile),
+            reverse=True,
+        )
+        if not signals.available or (
+            signals.confidence_for(ranked[0])
+            <= signals.confidence_for(ranked[1])
+        ):
+            ids = ", ".join(profile.id for profile in candidates)
+            raise PackageError(
+                f"{package.cve} matches multiple CVE-driven PoC profiles "
+                f"({ids}); captured patch signals do not disambiguate them; "
+                "refusing automatic profile selection"
+            )
+        candidates = (ranked[0],)
+
+    profile = candidates[0]
+    if signals.available and signals.confidence_for(profile) == 0.0:
+        observed = ", ".join(signals.protocols) or "no protocol modules"
+        raise PackageError(
+            f"{package.cve} advisory matches profile {profile.id!r}, but the "
+            f"captured fixing patch has no {profile.protocol!r} signal "
+            f"(observed: {observed}); refusing automatic profile selection"
+        )
+    return profile, signals
 
 
 def _placeholder(path: Path) -> bool:
@@ -236,7 +295,7 @@ def build_poc(package: Package, *, force: bool = False) -> dict[str, Any]:
     """
     if package.manifest is None or package.advisory is None:
         raise PackageError(f"{package.cve} has no valid package/advisory")
-    profile = _profile(package)
+    profile, signals = select_profile(package)
 
     poc_dir = package.root / "poc"
     exploit_path = poc_dir / "exploit.py"
@@ -353,6 +412,13 @@ def build_poc(package: Package, *, force: bool = False) -> dict[str, Any]:
             "predicate": predicate,
         },
         "patch_analysis": _patch_analysis(package),
+        "selector": {
+            "confidence": signals.confidence_for(profile),
+            "changed_paths": list(signals.changed_paths),
+            "indicators": list(signals.indicators),
+            "analyzed_patches": list(signals.patches),
+            "notes": list(signals.notes),
+        },
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
     _write_json(proposal_path, proposal)

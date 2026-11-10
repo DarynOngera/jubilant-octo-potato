@@ -14,6 +14,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO_ROOT / "src"))
@@ -24,14 +25,27 @@ from vulnforge.errors import PackageError  # noqa: E402
 from vulnforge.packages import load_package, validate_package  # noqa: E402
 from vulnforge.paths import Paths  # noqa: E402
 from vulnforge.pocgen import build_poc  # noqa: E402
-from vulnforge.pocgen.builder import GENERATED_MARKER  # noqa: E402
+from vulnforge.pocgen.builder import (  # noqa: E402
+    GENERATED_MARKER,
+    PROFILES,
+    matching_profiles,
+)
+from vulnforge.pocgen.signals import extract_patch_signals  # noqa: E402
 from vulnforge.scaffold import scaffold_package  # noqa: E402
 
 REFERENCE_CVE = "CVE-2026-116078"
+HTTP1_REFERENCE_CVE = "CVE-2026-39803"
 SYNTHETIC_CVE = "CVE-2099-0001"
+SYNTHETIC_HTTP1_CVE = "CVE-2099-0002"
 
 
-def _workspace(root: Path, *, cve: str = SYNTHETIC_CVE, track: str | None = None) -> Paths:
+def _workspace(
+    root: Path,
+    *,
+    cve: str = SYNTHETIC_CVE,
+    track: str | None = None,
+    template: str = REFERENCE_CVE,
+) -> Paths:
     """Create an isolated workspace whose catalog holds one synthetic CVE.
 
     The workspace layout mirrors the repository so both the API and the CLI
@@ -45,7 +59,7 @@ def _workspace(root: Path, *, cve: str = SYNTHETIC_CVE, track: str | None = None
     shutil.copy(real.data / "vulnerability-matrix.json", data / "vulnerability-matrix.json")
     catalog = json.loads((real.data / "advisories.json").read_text())
     row = dict(
-        next(r for r in catalog["advisories"] if r["cve"] == REFERENCE_CVE)
+        next(r for r in catalog["advisories"] if r["cve"] == template)
     )
     row["cve"] = cve
     if track is not None:
@@ -65,11 +79,11 @@ def _scaffold(paths: Paths, cve: str = SYNTHETIC_CVE) -> None:
     scaffold_package(load_config(REPO_ROOT), paths, cve)
 
 
-def _add_reference(paths: Paths) -> None:
+def _add_reference(paths: Paths, cve: str = REFERENCE_CVE) -> None:
     """Place the reviewed reference package next to the scaffold."""
     shutil.copytree(
-        REPO_ROOT / "vulnerabilities" / REFERENCE_CVE,
-        paths.packages / REFERENCE_CVE,
+        REPO_ROOT / "vulnerabilities" / cve,
+        paths.packages / cve,
         ignore=shutil.ignore_patterns("__pycache__"),
     )
 
@@ -158,6 +172,13 @@ class PocBuildTests(unittest.TestCase):
             self.assertIn("3000000", proposal["probe"]["predicate"])
             self.assertIn("run ranges must not overlap", proposal["probe"]["predicate"])
             self.assertEqual(proposal["patch_analysis"], [])
+            # A fresh scaffold has no captured commits, so selection is
+            # advisory-only at reduced confidence.
+            self.assertEqual(proposal["selector"]["confidence"], 0.5)
+            self.assertEqual(proposal["selector"]["changed_paths"], [])
+            self.assertEqual(proposal["selector"]["indicators"], [])
+            self.assertEqual(proposal["selector"]["analyzed_patches"], [])
+            self.assertTrue(proposal["selector"]["notes"])
 
             package_manifest = json.loads(
                 (paths.packages / SYNTHETIC_CVE / "package.json").read_text()
@@ -170,6 +191,130 @@ class PocBuildTests(unittest.TestCase):
 
             reloaded = _load(paths, SYNTHETIC_CVE)
             self.assertEqual(validate_package(reloaded, paths), [], reloaded.errors)
+
+    def test_builds_http1_chunked_length_cap_profile(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = _workspace(
+                Path(tmp), cve=SYNTHETIC_HTTP1_CVE, template=HTTP1_REFERENCE_CVE
+            )
+            _scaffold(paths, SYNTHETIC_HTTP1_CVE)
+            _add_reference(paths, HTTP1_REFERENCE_CVE)
+            package = _load(paths, SYNTHETIC_HTTP1_CVE)
+            self.assertEqual(validate_package(package, paths), [], package.errors)
+
+            result = build_poc(package)
+            self.assertEqual(result["profile"], "bandit-http1-chunked-length-cap")
+
+            generated = (
+                paths.packages / SYNTHETIC_HTTP1_CVE / "poc" / "exploit.py"
+            ).read_text()
+            self.assertIn(f'CVE = "{SYNTHETIC_HTTP1_CVE}"', generated)
+            self.assertIn("Transfer-Encoding: chunked", generated)
+            self.assertEqual(generated.count(HTTP1_REFERENCE_CVE), 1)
+
+            manifest = json.loads(
+                (
+                    paths.packages / SYNTHETIC_HTTP1_CVE / "poc" / "manifest.json"
+                ).read_text()
+            )
+            self.assertEqual(manifest["cve"], SYNTHETIC_HTTP1_CVE)
+            self.assertEqual(manifest["metric"], "attack_memory_delta")
+            self.assertEqual(
+                manifest["kwargs"],
+                {"total_bytes": 8388608, "chunk_size": 16384, "pace_ms": 1.0},
+            )
+            self.assertEqual(manifest["thresholds"]["vulnerable_min"], 4000000)
+            self.assertEqual(manifest["thresholds"]["patched_max"], 2000000)
+            self.assertEqual(manifest["runs"], 3)
+
+            proposal = json.loads(
+                (
+                    paths.packages / SYNTHETIC_HTTP1_CVE / "poc" / "proposal.json"
+                ).read_text()
+            )
+            self.assertEqual(proposal["profile"], "bandit-http1-chunked-length-cap")
+            self.assertEqual(
+                proposal["source"]["reference_cve"], HTTP1_REFERENCE_CVE
+            )
+            self.assertEqual(proposal["selector"]["confidence"], 0.5)
+
+            reloaded = _load(paths, SYNTHETIC_HTTP1_CVE)
+            self.assertEqual(validate_package(reloaded, paths), [], reloaded.errors)
+
+    def test_length_cap_profile_does_not_match_other_http1_cves(self):
+        catalog = json.loads(
+            (load_config(REPO_ROOT).paths().data / "advisories.json").read_text()
+        )["advisories"]
+        rows = {row["cve"]: row for row in catalog}
+        profile = next(
+            item
+            for item in PROFILES
+            if item.id == "bandit-http1-chunked-length-cap"
+        )
+
+        def advisory(cve: str) -> SimpleNamespace:
+            return SimpleNamespace(
+                track=rows[cve]["track"], title=rows[cve]["title"]
+            )
+
+        self.assertTrue(profile.matches(advisory("CVE-2026-39803")))
+        for cve in ("CVE-2026-39806", "CVE-2026-113436"):
+            self.assertFalse(profile.matches(advisory(cve)), cve)
+            self.assertEqual(matching_profiles(advisory(cve)), (), cve)
+
+    def test_patch_signals_corroborate_the_http1_length_cap_profile(self):
+        paths = load_config(REPO_ROOT).paths()
+        package = load_package(
+            REPO_ROOT / "vulnerabilities" / HTTP1_REFERENCE_CVE, paths.schemas
+        )
+
+        signals = extract_patch_signals(package)
+        self.assertTrue(signals.available)
+        self.assertIn("http1", signals.indicators)
+        self.assertIn("chunked_framing", signals.indicators)
+        self.assertIn("length_cap", signals.indicators)
+        self.assertIn("lib/bandit/http1/socket.ex", signals.changed_paths)
+        self.assertTrue(signals.patches)
+
+        http1 = next(
+            item
+            for item in PROFILES
+            if item.id == "bandit-http1-chunked-length-cap"
+        )
+        http2 = next(
+            item for item in PROFILES if item.id == "bandit-http2-one-byte-data"
+        )
+        self.assertGreaterEqual(signals.confidence_for(http1), 0.9)
+        self.assertEqual(signals.confidence_for(http2), 0.0)
+
+    def test_refuses_profile_when_patch_signals_contradict_advisory(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            paths = _workspace(
+                Path(tmp), cve=HTTP1_REFERENCE_CVE, template=HTTP1_REFERENCE_CVE
+            )
+            target = paths.packages / HTTP1_REFERENCE_CVE
+            shutil.copytree(
+                REPO_ROOT / "vulnerabilities" / HTTP1_REFERENCE_CVE,
+                target,
+                ignore=shutil.ignore_patterns("__pycache__"),
+            )
+            catalog = json.loads(
+                (load_config(REPO_ROOT).paths().data / "advisories.json").read_text()
+            )["advisories"]
+            http2 = next(
+                row for row in catalog if row["cve"] == REFERENCE_CVE
+            )
+            advisory_path = target / "advisory.json"
+            advisory = json.loads(advisory_path.read_text())
+            advisory["title"] = http2["title"]
+            advisory["track"] = http2["track"]
+            advisory_path.write_text(json.dumps(advisory, indent=2) + "\n")
+
+            with self.assertRaisesRegex(
+                PackageError, "refusing automatic profile selection"
+            ) as raised:
+                build_poc(_load(paths, HTTP1_REFERENCE_CVE))
+            self.assertIn("no 'http2' signal", str(raised.exception))
 
     def test_build_is_idempotent_for_unchanged_generated_probe(self):
         with tempfile.TemporaryDirectory() as tmp:

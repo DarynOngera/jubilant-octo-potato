@@ -73,12 +73,26 @@ future items.
 - [x] CSRF, loopback Host/Origin checks, and action validation
 - [x] UI tests and docs
 
+## CVE-driven PoC engine
+
+- [x] `vulnforge poc build <CVE>` with reviewed profile selection
+- [x] HTTP/2 one-byte DATA-frame and HTTP/1 one-byte chunk profiles
+- [x] HTTP/1 chunked length-cap profile (`CVE-2026-39803`)
+- [x] Provenance marker, idempotent rebuilds, `--force`, hand-authored protection
+- [x] `poc/proposal.json` with advisory facts, predicate, and provenance
+- [x] Patch-signal extraction, selector confidence, and contradiction veto
+- [x] Producer commands (`validate`, `detect`, `report`) can finish a bundle
+- [ ] Duration-based oracle for `CVE-2026-105659` (HTTP/2 blocked-send deadline)
+- [ ] Bounded parameter search (Phase 3)
+- [ ] Minimization (Phase 4)
+
 ## Current results
 
 | CVE | Pair | Metric | Vulnerable median | Patched median | Runs | Verdict | Detection |
 |---|---|---|---:|---:|---|---|---|
-| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 7.79 MiB | 0.63 MiB | 3 | CONFIRMED | TRIGGERED |
+| CVE-2026-116078 | 1.14.0 -> 1.14.1 | attack memory | 7.78 MiB | 0.60 MiB | 3 | CONFIRMED | TRIGGERED |
 | CVE-2026-111101 | 1.13.1 -> 1.14.0 | attack memory | 2.66 MiB | 1.67 MiB | 3 | INCONCLUSIVE (1.60x < 2.00x) | INCONCLUSIVE |
+| CVE-2026-39803 | 1.11.0 -> 1.11.1 | attack memory | 8.33 MiB | 0.96 MiB | 3 | CONFIRMED | TRIGGERED |
 
 ## Future work
 

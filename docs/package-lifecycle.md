@@ -144,8 +144,14 @@ just valid as a draft.
 
 The loader enforces this table through `src/vulnforge/contract.py`; the package
 schema and the file checks in `src/vulnforge/packages.py` use the same table.
-For a `validated`/`inconclusive` package, `package validate` now requires the
+For a `validated`/`inconclusive` package, `package validate` requires the
 validation bundle, detection evidence, and both report files.
+
+The producer commands (`validate`, `detect`, `report`) load the package with
+status-artifact enforcement disabled. They run in sequence and each writes one
+of those artifacts, so enforcing the final `validated` set while the bundle is
+still being produced would deadlock the lifecycle. `package validate`,
+`status`, `lab`, and `poc run/build` keep full enforcement.
 
 `lab-ready` and `retired` are valid schema values, but no current command writes
 them. `vulnforge poc build` sets `poc-implemented` (from `draft` only), and

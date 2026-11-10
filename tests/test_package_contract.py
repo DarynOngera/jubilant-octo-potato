@@ -12,7 +12,8 @@ sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from vulnforge.config import load_config  # noqa: E402
 from vulnforge.contract import missing_artifacts, required_artifacts  # noqa: E402
-from vulnforge.packages import load_package  # noqa: E402
+from vulnforge.packages import find_package, load_package  # noqa: E402
+from vulnforge.paths import Paths  # noqa: E402
 
 
 class PackageContractTests(unittest.TestCase):
@@ -45,6 +46,51 @@ class PackageContractTests(unittest.TestCase):
         self.assertTrue(
             any("report.json" in error for error in pkg.errors), pkg.errors
         )
+
+    def test_loader_can_skip_status_artifact_enforcement(self):
+        """Producer commands must load a package whose status outran its artifacts.
+
+        ``validate`` marks a package ``validated`` before ``detect`` and
+        ``report`` have written their artifacts; loading with enforcement on
+        would deadlock those producer steps.
+        """
+        paths = load_config(REPO_ROOT).paths()
+        with tempfile.TemporaryDirectory() as tmp:
+            target = Path(tmp) / "CVE-2026-116078"
+            shutil.copytree(paths.packages / "CVE-2026-116078", target)
+            (target / "report.json").unlink()
+            pkg = load_package(
+                target, paths.schemas, enforce_status_artifacts=False
+            )
+        self.assertFalse(
+            any("required artifact for status" in error for error in pkg.errors),
+            pkg.errors,
+        )
+
+    def test_find_package_threads_status_artifact_opt_out(self):
+        real = load_config(REPO_ROOT).paths()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = Paths.from_root(root)
+            paths.packages.mkdir(parents=True)
+            shutil.copytree(real.schemas, paths.schemas)
+            target = paths.packages / "CVE-2026-116078"
+            shutil.copytree(real.packages / "CVE-2026-116078", target)
+            (target / "report.json").unlink()
+
+            strict = find_package(paths, "CVE-2026-116078")
+            relaxed = find_package(
+                paths, "CVE-2026-116078", enforce_status_artifacts=False
+            )
+
+            self.assertTrue(
+                any("required artifact for status" in e for e in strict.errors),
+                strict.errors,
+            )
+            self.assertFalse(
+                any("required artifact for status" in e for e in relaxed.errors),
+                relaxed.errors,
+            )
 
 
 if __name__ == "__main__":
